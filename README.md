@@ -1,2 +1,6 @@
 # egui-baseview
-A baseview backend for the egui Rust GUI library
+
+A [`baseview`] backend for [`egui`].
+
+[`baseview`]: https://github.com/RustAudio/baseview
+[`egui`]: https://github.com/emilk/egui
