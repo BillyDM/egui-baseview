@@ -6,6 +6,8 @@ use crate::{
 use baseview::{Event, Window, WindowHandler, WindowScalePolicy};
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 
+use std::time::Instant;
+
 use egui::{pos2, vec2, Pos2, Rect, Srgba};
 
 struct OpenSettings {
@@ -34,7 +36,7 @@ impl OpenSettings {
 pub struct EguiWindow<State, U>
 where
     State: 'static + Send,
-    U: FnMut(&egui::CtxRef, &mut Painter, &mut State) -> Srgba,
+    U: FnMut(&egui::CtxRef, &mut Painter, &mut Srgba, &mut State),
     U: 'static + Send,
 {
     user_state: State,
@@ -47,13 +49,15 @@ where
     scale_factor: f64,
     scale_policy: WindowScalePolicy,
     pixels_per_point: f32,
+    bg_color: Srgba,
     modifiers: egui::Modifiers,
+    start_time: Instant,
 }
 
 impl<State, U> EguiWindow<State, U>
 where
     State: 'static + Send,
-    U: FnMut(&egui::CtxRef, &mut Painter, &mut State) -> Srgba,
+    U: FnMut(&egui::CtxRef, &mut Painter, &mut Srgba, &mut State),
     U: 'static + Send,
 {
     fn new(
@@ -104,6 +108,7 @@ where
             scale_factor: scale,
             scale_policy: open_settings.scale_policy,
             pixels_per_point,
+            bg_color: Srgba::black_alpha(255),
             modifiers: egui::Modifiers {
                 alt: false,
                 ctrl: false,
@@ -111,6 +116,7 @@ where
                 mac_cmd: false,
                 command: false,
             },
+            start_time: Instant::now(),
         }
     }
 
@@ -177,15 +183,18 @@ where
 impl<State, U> WindowHandler for EguiWindow<State, U>
 where
     State: 'static + Send,
-    U: FnMut(&egui::CtxRef, &mut Painter, &mut State) -> Srgba,
+    U: FnMut(&egui::CtxRef, &mut Painter, &mut Srgba, &mut State),
     U: 'static + Send,
 {
     fn on_frame(&mut self) {
+        self.raw_input.time = Some(self.start_time.elapsed().as_nanos() as f64 * 1e-9);
+
         self.egui_ctx.begin_frame(self.raw_input.take());
 
-        let bg_color = (self.user_update)(
+        (self.user_update)(
             &self.egui_ctx,
             &mut self.renderer.painter(),
+            &mut self.bg_color,
             &mut self.user_state,
         );
 
@@ -194,7 +203,7 @@ where
         let paint_jobs = self.egui_ctx.tesselate(paint_cmds);
 
         self.renderer.render(
-            bg_color,
+            self.bg_color,
             paint_jobs,
             &self.egui_ctx.texture(),
             self.pixels_per_point,

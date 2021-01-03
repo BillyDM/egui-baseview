@@ -210,7 +210,7 @@ fn link_program(vs: GLuint, fs: GLuint) -> GLuint {
 }
 
 impl Painter {
-    pub fn new(canvas_width: u32, canvas_height: u32) -> Painter {
+    pub(crate) fn new(canvas_width: u32, canvas_height: u32) -> Painter {
         unsafe {
             let mut egui_texture = 0;
             gl::GenTextures(1, &mut egui_texture);
