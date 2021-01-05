@@ -7,18 +7,23 @@ use std::time::Instant;
 
 use egui::{pos2, vec2, Color32, Pos2, Rect};
 
-/// Called once before the first frame.
-/// Allows you to do setup code and to call `ctx.set_fonts()`.
-/// Optional.
-
 pub struct Queue<'a> {
     bg_color: &'a mut Color32,
     renderer: &'a mut Renderer,
+    repaint_requested: &'a mut bool,
 }
 
 impl<'a> Queue<'a> {
-    pub(crate) fn new(bg_color: &'a mut Color32, renderer: &'a mut Renderer) -> Self {
-        Self { bg_color, renderer }
+    pub(crate) fn new(
+        bg_color: &'a mut Color32,
+        renderer: &'a mut Renderer,
+        repaint_requested: &'a mut bool,
+    ) -> Self {
+        Self {
+            bg_color,
+            renderer,
+            repaint_requested,
+        }
     }
 
     /// Set the background color.
@@ -40,6 +45,11 @@ impl<'a> Queue<'a> {
     /// Update a custom texture.
     pub fn update_user_texture_data(&mut self, texture_id: egui::TextureId, pixels: &[Color32]) {
         self.renderer.update_user_texture_data(texture_id, pixels)
+    }
+
+    /// Request to repaint the UI on the next frame.
+    pub fn request_repaint(&mut self) {
+        *self.repaint_requested = true;
     }
 }
 
@@ -137,7 +147,8 @@ where
 
         let mut bg_color = Color32::BLACK;
 
-        let mut queue = Queue::new(&mut bg_color, &mut renderer);
+        let mut repaint_requested = false;
+        let mut queue = Queue::new(&mut bg_color, &mut renderer, &mut repaint_requested);
         (build)(&egui_ctx, &mut queue, &mut state);
 
         Self {
@@ -254,23 +265,29 @@ where
         self.raw_input.time = Some(self.start_time.elapsed().as_nanos() as f64 * 1e-9);
         self.egui_ctx.begin_frame(self.raw_input.take());
 
-        let mut queue = Queue::new(&mut self.bg_color, &mut self.renderer);
+        let mut repaint_requested = false;
+        let mut queue = Queue::new(
+            &mut self.bg_color,
+            &mut self.renderer,
+            &mut repaint_requested,
+        );
 
         (self.user_update)(&self.egui_ctx, &mut queue, &mut self.user_state);
 
-        // We aren't handling the output at the moment.
-        let (_output, paint_cmds) = self.egui_ctx.end_frame();
+        let (output, paint_cmds) = self.egui_ctx.end_frame();
 
-        dbg!(paint_cmds.len());
+        if output.needs_repaint || repaint_requested {
+            let paint_jobs = self.egui_ctx.tessellate(paint_cmds);
 
-        let paint_jobs = self.egui_ctx.tessellate(paint_cmds);
+            self.renderer.render(
+                self.bg_color,
+                paint_jobs,
+                &self.egui_ctx.texture(),
+                self.pixels_per_point,
+            );
+        }
 
-        self.renderer.render(
-            self.bg_color,
-            paint_jobs,
-            &self.egui_ctx.texture(),
-            self.pixels_per_point,
-        );
+        // TODO: Handle the rest of the outputs.
     }
 
     fn on_event(&mut self, _window: &mut Window, event: Event) {
