@@ -41,7 +41,7 @@ use std::str;
 
 use egui::{
     math::clamp,
-    paint::{PaintJobs, Srgba, Texture, Triangles},
+    paint::{Color32, PaintJobs, Texture, Triangles},
     vec2,
 };
 
@@ -255,7 +255,7 @@ impl Painter {
     pub fn new_user_texture(
         &mut self,
         size: (usize, usize),
-        srgba_pixels: &[Srgba],
+        srgba_pixels: &[Color32],
         filtering: bool,
     ) -> egui::TextureId {
         assert_eq!(size.0 * size.1, srgba_pixels.len());
@@ -286,7 +286,7 @@ impl Painter {
 
         let mut pixels: Vec<u8> = Vec::with_capacity(texture.pixels.len() * 4);
         for &alpha in &texture.pixels {
-            let srgba = Srgba::white_alpha(alpha);
+            let srgba = Color32::from_white_alpha(alpha);
             pixels.push(srgba.r());
             pixels.push(srgba.g());
             pixels.push(srgba.b());
@@ -395,7 +395,7 @@ impl Painter {
         }
     }
 
-    pub fn update_user_texture_data(&mut self, texture_id: egui::TextureId, pixels: &[Srgba]) {
+    pub fn update_user_texture_data(&mut self, texture_id: egui::TextureId, pixels: &[Color32]) {
         match texture_id {
             egui::TextureId::Egui => {}
             egui::TextureId::User(id) => {
@@ -416,7 +416,7 @@ impl Painter {
 
     pub fn paint_jobs(
         &mut self,
-        bg_color: Srgba,
+        bg_color: Color32,
         jobs: PaintJobs,
         egui_texture: &Texture,
         pixels_per_point: f32,

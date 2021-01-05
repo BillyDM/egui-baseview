@@ -1,14 +1,47 @@
+use crate::renderer::{RenderSettings, Renderer};
 use crate::Settings;
-use crate::{
-    renderer::{RenderSettings, Renderer},
-    Painter,
-};
 use baseview::{Event, Window, WindowHandler, WindowScalePolicy};
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 
 use std::time::Instant;
 
-use egui::{pos2, vec2, Pos2, Rect, Srgba};
+use egui::{pos2, vec2, Color32, Pos2, Rect};
+
+/// Called once before the first frame.
+/// Allows you to do setup code and to call `ctx.set_fonts()`.
+/// Optional.
+
+pub struct Queue<'a> {
+    bg_color: &'a mut Color32,
+    renderer: &'a mut Renderer,
+}
+
+impl<'a> Queue<'a> {
+    pub(crate) fn new(bg_color: &'a mut Color32, renderer: &'a mut Renderer) -> Self {
+        Self { bg_color, renderer }
+    }
+
+    /// Set the background color.
+    pub fn bg_color(&mut self, bg_color: Color32) {
+        *self.bg_color = bg_color;
+    }
+
+    /// Create a new custom texture.
+    pub fn new_user_texture(
+        &mut self,
+        size: (usize, usize),
+        srgba_pixels: &[Color32],
+        filtering: bool,
+    ) -> egui::TextureId {
+        self.renderer
+            .new_user_texture(size, srgba_pixels, filtering)
+    }
+
+    /// Update a custom texture.
+    pub fn update_user_texture_data(&mut self, texture_id: egui::TextureId, pixels: &[Color32]) {
+        self.renderer.update_user_texture_data(texture_id, pixels)
+    }
+}
 
 struct OpenSettings {
     pub scale_policy: WindowScalePolicy,
@@ -36,7 +69,7 @@ impl OpenSettings {
 pub struct EguiWindow<State, U>
 where
     State: 'static + Send,
-    U: FnMut(&egui::CtxRef, &mut Painter, &mut Srgba, &mut State),
+    U: FnMut(&egui::CtxRef, &mut Queue, &mut State),
     U: 'static + Send,
 {
     user_state: State,
@@ -49,7 +82,7 @@ where
     scale_factor: f64,
     scale_policy: WindowScalePolicy,
     pixels_per_point: f32,
-    bg_color: Srgba,
+    bg_color: Color32,
     modifiers: egui::Modifiers,
     start_time: Instant,
 }
@@ -57,16 +90,21 @@ where
 impl<State, U> EguiWindow<State, U>
 where
     State: 'static + Send,
-    U: FnMut(&egui::CtxRef, &mut Painter, &mut Srgba, &mut State),
+    U: FnMut(&egui::CtxRef, &mut Queue, &mut State),
     U: 'static + Send,
 {
-    fn new(
+    fn new<B>(
         window: &mut baseview::Window<'_>,
         open_settings: OpenSettings,
         mut render_settings: Option<RenderSettings>,
+        mut build: B,
         update: U,
-        state: State,
-    ) -> EguiWindow<State, U> {
+        mut state: State,
+    ) -> EguiWindow<State, U>
+    where
+        B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+        B: 'static + Send,
+    {
         // Assume scale for now until there is an event with a new one.
         let scale = match open_settings.scale_policy {
             WindowScalePolicy::ScaleFactor(scale) => scale,
@@ -88,7 +126,7 @@ where
             ..Default::default()
         };
 
-        let renderer = Renderer::new(
+        let mut renderer = Renderer::new(
             window,
             render_settings.take().unwrap(),
             (
@@ -96,6 +134,11 @@ where
                 open_settings.logical_height.round() as u32,
             ),
         );
+
+        let mut bg_color = Color32::BLACK;
+
+        let mut queue = Queue::new(&mut bg_color, &mut renderer);
+        (build)(&egui_ctx, &mut queue, &mut state);
 
         Self {
             user_state: state,
@@ -108,7 +151,7 @@ where
             scale_factor: scale,
             scale_policy: open_settings.scale_policy,
             pixels_per_point,
-            bg_color: Srgba::black_alpha(255),
+            bg_color,
             modifiers: egui::Modifiers {
                 alt: false,
                 ctrl: false,
@@ -125,11 +168,15 @@ where
     /// * `parent` - The parent window.
     /// * `settings` - The settings of the window.
     /// * `state` - The initial state of your application.
+    /// * `build` - Called once before the first frame. Allows you to do setup code and to
+    /// call `ctx.set_fonts()`. Optional.
     /// * `update` - Called before each frame. Here you should update the state of your
     /// application and build the UI.
-    pub fn open_parented<P>(parent: &P, settings: Settings, state: State, update: U)
+    pub fn open_parented<P, B>(parent: &P, settings: Settings, state: State, build: B, update: U)
     where
         P: HasRawWindowHandle,
+        B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+        B: 'static + Send,
     {
         let open_settings = OpenSettings::new(&settings);
         let render_settings = Some(settings.render_settings);
@@ -138,7 +185,7 @@ where
             parent,
             settings.window,
             move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
-                EguiWindow::new(window, open_settings, render_settings, update, state)
+                EguiWindow::new(window, open_settings, render_settings, build, update, state)
             },
         )
     }
@@ -147,16 +194,27 @@ where
     ///
     /// * `settings` - The settings of the window.
     /// * `state` - The initial state of your application.
+    /// * `build` - Called once before the first frame. Allows you to do setup code and to
+    /// call `ctx.set_fonts()`. Optional.
     /// * `update` - Called before each frame. Here you should update the state of your
     /// application and build the UI.
-    pub fn open_as_if_parented(settings: Settings, state: State, update: U) -> RawWindowHandle {
+    pub fn open_as_if_parented<B>(
+        settings: Settings,
+        state: State,
+        build: B,
+        update: U,
+    ) -> RawWindowHandle
+    where
+        B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+        B: 'static + Send,
+    {
         let open_settings = OpenSettings::new(&settings);
         let render_settings = Some(settings.render_settings);
 
         Window::open_as_if_parented(
             settings.window,
             move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
-                EguiWindow::new(window, open_settings, render_settings, update, state)
+                EguiWindow::new(window, open_settings, render_settings, build, update, state)
             },
         )
     }
@@ -165,16 +223,22 @@ where
     ///
     /// * `settings` - The settings of the window.
     /// * `state` - The initial state of your application.
+    /// * `build` - Called once before the first frame. Allows you to do setup code and to
+    /// call `ctx.set_fonts()`. Optional.
     /// * `update` - Called before each frame. Here you should update the state of your
     /// application and build the UI.
-    pub fn open_blocking(settings: Settings, state: State, update: U) {
+    pub fn open_blocking<B>(settings: Settings, state: State, build: B, update: U)
+    where
+        B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+        B: 'static + Send,
+    {
         let open_settings = OpenSettings::new(&settings);
         let render_settings = Some(settings.render_settings);
 
         Window::open_blocking(
             settings.window,
             move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
-                EguiWindow::new(window, open_settings, render_settings, update, state)
+                EguiWindow::new(window, open_settings, render_settings, build, update, state)
             },
         )
     }
@@ -183,24 +247,23 @@ where
 impl<State, U> WindowHandler for EguiWindow<State, U>
 where
     State: 'static + Send,
-    U: FnMut(&egui::CtxRef, &mut Painter, &mut Srgba, &mut State),
+    U: FnMut(&egui::CtxRef, &mut Queue, &mut State),
     U: 'static + Send,
 {
     fn on_frame(&mut self) {
         self.raw_input.time = Some(self.start_time.elapsed().as_nanos() as f64 * 1e-9);
-
         self.egui_ctx.begin_frame(self.raw_input.take());
 
-        (self.user_update)(
-            &self.egui_ctx,
-            &mut self.renderer.painter(),
-            &mut self.bg_color,
-            &mut self.user_state,
-        );
+        let mut queue = Queue::new(&mut self.bg_color, &mut self.renderer);
+
+        (self.user_update)(&self.egui_ctx, &mut queue, &mut self.user_state);
 
         // We aren't handling the output at the moment.
         let (_output, paint_cmds) = self.egui_ctx.end_frame();
-        let paint_jobs = self.egui_ctx.tesselate(paint_cmds);
+
+        dbg!(paint_cmds.len());
+
+        let paint_jobs = self.egui_ctx.tessellate(paint_cmds);
 
         self.renderer.render(
             self.bg_color,
@@ -218,12 +281,16 @@ where
                 }
                 baseview::MouseEvent::ButtonPressed(button) => match button {
                     // TODO: More mouse buttons?
-                    baseview::MouseButton::Left => self.raw_input.mouse_down = true,
+                    baseview::MouseButton::Left => {
+                        self.raw_input.mouse_down = true;
+                    }
                     _ => {}
                 },
                 baseview::MouseEvent::ButtonReleased(button) => match button {
                     // TODO: More mouse buttons?
-                    baseview::MouseButton::Left => self.raw_input.mouse_down = false,
+                    baseview::MouseButton::Left => {
+                        self.raw_input.mouse_down = false;
+                    }
                     _ => {}
                 },
                 baseview::MouseEvent::WheelScrolled(scroll_delta) => {

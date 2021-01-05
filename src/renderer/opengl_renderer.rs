@@ -1,11 +1,11 @@
 use baseview::Window;
-use egui::Srgba;
+use egui::Color32;
 use raw_gl_context::GlContext;
 
 pub use raw_gl_context::GlConfig as RenderSettings;
 
 mod painter;
-pub use painter::Painter;
+use painter::Painter;
 
 pub struct Renderer {
     context: GlContext,
@@ -29,7 +29,7 @@ impl Renderer {
 
     pub fn render(
         &mut self,
-        bg_color: Srgba,
+        bg_color: Color32,
         jobs: egui::PaintJobs,
         egui_texture: &egui::Texture,
         pixels_per_point: f32,
@@ -43,7 +43,16 @@ impl Renderer {
         self.context.make_not_current();
     }
 
-    pub fn painter(&mut self) -> &mut Painter {
-        &mut self.painter
+    pub fn new_user_texture(
+        &mut self,
+        size: (usize, usize),
+        srgba_pixels: &[Color32],
+        filtering: bool,
+    ) -> egui::TextureId {
+        self.painter.new_user_texture(size, srgba_pixels, filtering)
+    }
+
+    pub fn update_user_texture_data(&mut self, texture_id: egui::TextureId, pixels: &[Color32]) {
+        self.painter.update_user_texture_data(texture_id, pixels)
     }
 }

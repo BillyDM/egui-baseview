@@ -1,6 +1,6 @@
 use baseview::{Size, WindowOpenOptions, WindowScalePolicy};
-use egui::{CtxRef, Srgba};
-use egui_baseview::{EguiWindow, Painter, RenderSettings, Settings};
+use egui::CtxRef;
+use egui_baseview::{EguiWindow, Queue, RenderSettings, Settings};
 
 fn main() {
     let settings = Settings {
@@ -17,7 +17,8 @@ fn main() {
     EguiWindow::open_blocking(
         settings,
         state,
-        |egui_ctx: &CtxRef, _painter: &mut Painter, _bg_color: &mut Srgba, _state: &mut ()| {
+        |_egui_ctx: &CtxRef, _queue: &mut Queue, _state: &mut ()| {},
+        |egui_ctx: &CtxRef, _queue: &mut Queue, _state: &mut ()| {
             egui::Window::new("egui-baseview hello world").show(&egui_ctx, |ui| {
                 ui.label("Hello World!");
             });

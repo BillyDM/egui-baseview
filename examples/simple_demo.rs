@@ -1,17 +1,3 @@
-# egui-baseview
-![Test](https://github.com/BillyDM/egui-baseview/workflows/Rust/badge.svg)
-[![Crates.io](https://img.shields.io/crates/v/egui-baseview.svg)](https://crates.io/crates/egui-baseview)
-[![License](https://img.shields.io/crates/l/egui-baseview.svg)](https://github.com/BillyDM/egui-baseview/blob/main/LICENSE)
-
-A [`baseview`] backend for [`egui`].
-
-<div align="center">
-    <img src="screenshot.png">
-</div>
-
-## Simple Usage Example
-
-```rust
 use baseview::{Size, WindowOpenOptions, WindowScalePolicy};
 use egui::CtxRef;
 use egui_baseview::{EguiWindow, Queue, RenderSettings, Settings};
@@ -66,7 +52,3 @@ impl State {
         }
     }
 }
-```
-
-[`baseview`]: https://github.com/RustAudio/baseview
-[`egui`]: https://github.com/emilk/egui
