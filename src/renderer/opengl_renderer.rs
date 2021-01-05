@@ -55,4 +55,8 @@ impl Renderer {
     pub fn update_user_texture_data(&mut self, texture_id: egui::TextureId, pixels: &[Color32]) {
         self.painter.update_user_texture_data(texture_id, pixels)
     }
+
+    pub fn update_window_size(&mut self, width: u32, height: u32) {
+        self.painter.set_canvas_size(width, height);
+    }
 }

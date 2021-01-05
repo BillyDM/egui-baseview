@@ -252,6 +252,11 @@ impl Painter {
         }
     }
 
+    pub fn set_canvas_size(&mut self, width: u32, height: u32) {
+        self.canvas_width = width;
+        self.canvas_height = height;
+    }
+
     pub fn new_user_texture(
         &mut self,
         size: (usize, usize),

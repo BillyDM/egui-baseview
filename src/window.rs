@@ -95,6 +95,7 @@ where
     bg_color: Color32,
     modifiers: egui::Modifiers,
     start_time: Instant,
+    redraw: bool,
 }
 
 impl<State, U> EguiWindow<State, U>
@@ -171,6 +172,7 @@ where
                 command: false,
             },
             start_time: Instant::now(),
+            redraw: true,
         }
     }
 
@@ -276,7 +278,7 @@ where
 
         let (output, paint_cmds) = self.egui_ctx.end_frame();
 
-        if output.needs_repaint || repaint_requested {
+        if output.needs_repaint || self.redraw || repaint_requested {
             let paint_jobs = self.egui_ctx.tessellate(paint_cmds);
 
             self.renderer.render(
@@ -285,6 +287,8 @@ where
                 &self.egui_ctx.texture(),
                 self.pixels_per_point,
             );
+
+            self.redraw = false;
         }
 
         // TODO: Handle the rest of the outputs.
@@ -398,6 +402,13 @@ where
                         Pos2::new(0f32, 0f32),
                         vec2(logical_size.0, logical_size.1),
                     ));
+
+                    self.renderer.update_window_size(
+                        window_info.physical_size().width,
+                        window_info.physical_size().height,
+                    );
+
+                    self.redraw = true;
                 }
                 baseview::WindowEvent::WillClose => {}
                 _ => {}
