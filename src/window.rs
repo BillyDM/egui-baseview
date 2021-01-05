@@ -89,9 +89,8 @@ where
     raw_input: egui::RawInput,
 
     renderer: Renderer,
-    scale_factor: f64,
+    scale_factor: f32,
     scale_policy: WindowScalePolicy,
-    pixels_per_point: f32,
     bg_color: Color32,
     modifiers: egui::Modifiers,
     start_time: Instant,
@@ -120,8 +119,7 @@ where
         let scale = match open_settings.scale_policy {
             WindowScalePolicy::ScaleFactor(scale) => scale,
             WindowScalePolicy::SystemScaleFactor => 1.0,
-        };
-        let pixels_per_point = 1.0 / scale as f32;
+        } as f32;
 
         let egui_ctx = egui::CtxRef::default();
 
@@ -131,9 +129,9 @@ where
                 vec2(
                     open_settings.logical_width as f32,
                     open_settings.logical_height as f32,
-                ) * scale as f32,
+                ),
             )),
-            pixels_per_point: Some(pixels_per_point),
+            pixels_per_point: Some(scale),
             ..Default::default()
         };
 
@@ -141,8 +139,8 @@ where
             window,
             render_settings.take().unwrap(),
             (
-                open_settings.logical_width.round() as u32,
-                open_settings.logical_height.round() as u32,
+                (open_settings.logical_width * scale as f64).round() as u32,
+                (open_settings.logical_height * scale as f64).round() as u32,
             ),
         );
 
@@ -162,7 +160,6 @@ where
             renderer,
             scale_factor: scale,
             scale_policy: open_settings.scale_policy,
-            pixels_per_point,
             bg_color,
             modifiers: egui::Modifiers {
                 alt: false,
@@ -285,7 +282,7 @@ where
                 self.bg_color,
                 paint_jobs,
                 &self.egui_ctx.texture(),
-                self.pixels_per_point,
+                self.scale_factor,
             );
 
             self.redraw = false;
@@ -387,16 +384,14 @@ where
                     self.scale_factor = match self.scale_policy {
                         WindowScalePolicy::ScaleFactor(scale) => scale,
                         WindowScalePolicy::SystemScaleFactor => window_info.scale(),
-                    };
-
-                    self.pixels_per_point = 1.0 / self.scale_factor as f32;
+                    } as f32;
 
                     let logical_size = (
-                        (window_info.physical_size().width as f64 / self.scale_factor) as f32,
-                        (window_info.physical_size().height as f64 / self.scale_factor) as f32,
+                        (window_info.physical_size().width as f32 / self.scale_factor),
+                        (window_info.physical_size().height as f32 / self.scale_factor),
                     );
 
-                    self.raw_input.pixels_per_point = Some(self.pixels_per_point);
+                    self.raw_input.pixels_per_point = Some(self.scale_factor);
 
                     self.raw_input.screen_rect = Some(Rect::from_min_size(
                         Pos2::new(0f32, 0f32),
