@@ -1,6 +1,6 @@
 use crate::renderer::{RenderSettings, Renderer};
 use crate::Settings;
-use baseview::{Event, Window, WindowHandler, WindowScalePolicy};
+use baseview::{Event, EventStatus, Window, WindowHandler, WindowScalePolicy};
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 
 use std::time::Instant;
@@ -260,7 +260,7 @@ where
     U: FnMut(&egui::CtxRef, &mut Queue, &mut State),
     U: 'static + Send,
 {
-    fn on_frame(&mut self) {
+    fn on_frame(&mut self, _window: &mut Window) {
         self.raw_input.time = Some(self.start_time.elapsed().as_nanos() as f64 * 1e-9);
         self.egui_ctx.begin_frame(self.raw_input.take());
 
@@ -291,7 +291,7 @@ where
         // TODO: Handle the rest of the outputs.
     }
 
-    fn on_event(&mut self, _window: &mut Window, event: Event) {
+    fn on_event(&mut self, _window: &mut Window, event: Event) -> EventStatus {
         match &event {
             baseview::Event::Mouse(event) => match event {
                 baseview::MouseEvent::CursorMoved { position } => {
@@ -409,6 +409,8 @@ where
                 _ => {}
             },
         }
+
+        EventStatus::Captured
     }
 }
 
