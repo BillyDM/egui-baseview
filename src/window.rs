@@ -5,17 +5,17 @@ use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 
 use std::time::Instant;
 
-use egui::{pos2, vec2, Color32, Pos2, Rect};
+use egui::{pos2, vec2, Color32, Pos2, Rect, Rgba};
 
 pub struct Queue<'a> {
-    bg_color: &'a mut Color32,
+    bg_color: &'a mut Rgba,
     renderer: &'a mut Renderer,
     repaint_requested: &'a mut bool,
 }
 
 impl<'a> Queue<'a> {
     pub(crate) fn new(
-        bg_color: &'a mut Color32,
+        bg_color: &'a mut Rgba,
         renderer: &'a mut Renderer,
         repaint_requested: &'a mut bool,
     ) -> Self {
@@ -27,7 +27,7 @@ impl<'a> Queue<'a> {
     }
 
     /// Set the background color.
-    pub fn bg_color(&mut self, bg_color: Color32) {
+    pub fn bg_color(&mut self, bg_color: Rgba) {
         *self.bg_color = bg_color;
     }
 
@@ -91,10 +91,11 @@ where
     renderer: Renderer,
     scale_factor: f32,
     scale_policy: WindowScalePolicy,
-    bg_color: Color32,
+    bg_color: Rgba,
     modifiers: egui::Modifiers,
     start_time: Instant,
     redraw: bool,
+    mouse_pos: Option<Pos2>,
 }
 
 impl<State, U> EguiWindow<State, U>
@@ -144,7 +145,7 @@ where
             ),
         );
 
-        let mut bg_color = Color32::BLACK;
+        let mut bg_color = Rgba::BLACK;
 
         let mut repaint_requested = false;
         let mut queue = Queue::new(&mut bg_color, &mut renderer, &mut repaint_requested);
@@ -170,6 +171,7 @@ where
             },
             start_time: Instant::now(),
             redraw: true,
+            mouse_pos: None,
         }
     }
 
@@ -295,22 +297,34 @@ where
         match &event {
             baseview::Event::Mouse(event) => match event {
                 baseview::MouseEvent::CursorMoved { position } => {
-                    self.raw_input.mouse_pos = Some(pos2(position.x as f32, position.y as f32));
+                    let pos = pos2(position.x as f32, position.y as f32);
+                    self.mouse_pos = Some(pos);
+                    self.raw_input.events.push(egui::Event::PointerMoved(pos));
                 }
-                baseview::MouseEvent::ButtonPressed(button) => match button {
-                    // TODO: More mouse buttons?
-                    baseview::MouseButton::Left => {
-                        self.raw_input.mouse_down = true;
+                baseview::MouseEvent::ButtonPressed(button) => {
+                    if let Some(pos) = self.mouse_pos {
+                        if let Some(button) = translate_mouse_button(*button) {
+                            self.raw_input.events.push(egui::Event::PointerButton {
+                                pos,
+                                button,
+                                pressed: true,
+                                modifiers: self.modifiers,
+                            });
+                        }
                     }
-                    _ => {}
-                },
-                baseview::MouseEvent::ButtonReleased(button) => match button {
-                    // TODO: More mouse buttons?
-                    baseview::MouseButton::Left => {
-                        self.raw_input.mouse_down = false;
+                }
+                baseview::MouseEvent::ButtonReleased(button) => {
+                    if let Some(pos) = self.mouse_pos {
+                        if let Some(button) = translate_mouse_button(*button) {
+                            self.raw_input.events.push(egui::Event::PointerButton {
+                                pos,
+                                button,
+                                pressed: false,
+                                modifiers: self.modifiers,
+                            });
+                        }
                     }
-                    _ => {}
-                },
+                }
                 baseview::MouseEvent::WheelScrolled(scroll_delta) => {
                     let (lines_x, lines_y) = match scroll_delta {
                         baseview::ScrollDelta::Lines { x, y } => (*x, *y),
@@ -333,6 +347,10 @@ where
                     };
 
                     self.raw_input.scroll_delta = vec2(lines_x as f32, lines_y as f32);
+                }
+                baseview::MouseEvent::CursorLeft => {
+                    self.mouse_pos = None;
+                    self.raw_input.events.push(egui::Event::PointerGone);
                 }
                 _ => {}
             },
@@ -411,6 +429,15 @@ where
         }
 
         EventStatus::Captured
+    }
+}
+
+pub fn translate_mouse_button(button: baseview::MouseButton) -> Option<egui::PointerButton> {
+    match button {
+        baseview::MouseButton::Left => Some(egui::PointerButton::Primary),
+        baseview::MouseButton::Right => Some(egui::PointerButton::Secondary),
+        baseview::MouseButton::Middle => Some(egui::PointerButton::Middle),
+        _ => None,
     }
 }
 

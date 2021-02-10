@@ -41,7 +41,7 @@ use std::str;
 
 use egui::{
     math::clamp,
-    paint::{Color32, PaintJobs, Texture, Triangles},
+    paint::{ClippedMesh, Color32, Mesh, Texture},
     vec2,
 };
 
@@ -73,6 +73,7 @@ const VS_SRC: &str = r#"
     in vec2 a_tc;
     out vec4 v_rgba;
     out vec2 v_tc;
+
     // 0-1 linear  from  0-255 sRGB
     vec3 linear_from_srgb(vec3 srgb) {
         bvec3 cutoff = lessThan(srgb, vec3(10.31475));
@@ -80,9 +81,11 @@ const VS_SRC: &str = r#"
         vec3 higher = pow((srgb + vec3(14.025)) / vec3(269.025), vec3(2.4));
         return mix(higher, lower, cutoff);
     }
+
     vec4 linear_from_srgba(vec4 srgba) {
         return vec4(linear_from_srgb(srgba.rgb), srgba.a / 255.0);
     }
+
     void main() {
         gl_Position = vec4(
             2.0 * a_pos.x / u_screen_size.x - 1.0,
@@ -100,6 +103,7 @@ const FS_SRC: &str = r#"
     in vec4 v_rgba;
     in vec2 v_tc;
     out vec4 f_color;
+
     // 0-255 sRGB  from  0-1 linear
     vec3 srgb_from_linear(vec3 rgb) {
         bvec3 cutoff = lessThan(rgb, vec3(0.0031308));
@@ -107,6 +111,7 @@ const FS_SRC: &str = r#"
         vec3 higher = vec3(269.025) * pow(rgb, vec3(1.0 / 2.4)) - vec3(14.025);
         return mix(higher, lower, vec3(cutoff));
     }
+
     vec4 srgba_from_linear(vec4 rgba) {
         return vec4(srgb_from_linear(rgba.rgb), 255.0 * rgba.a);
     }
@@ -117,9 +122,11 @@ const FS_SRC: &str = r#"
         vec3 higher = pow((srgb + vec3(14.025)) / vec3(269.025), vec3(2.4));
         return mix(higher, lower, vec3(cutoff));
     }
+
     vec4 linear_from_srgba(vec4 srgba) {
         return vec4(linear_from_srgb(srgba.rgb), srgba.a / 255.0);
     }
+    
     void main() {
         // Need to convert from SRGBA to linear.
         vec4 texture_rgba = linear_from_srgba(texture(u_sampler, v_tc) * 255.0);
@@ -388,14 +395,15 @@ impl Painter {
         }
     }
 
-    fn get_texture(&self, texture_id: egui::TextureId) -> GLuint {
+    fn get_texture(&self, texture_id: egui::TextureId) -> Option<GLuint> {
         match texture_id {
-            egui::TextureId::Egui => self.egui_texture,
+            egui::TextureId::Egui => Some(self.egui_texture),
             egui::TextureId::User(id) => {
                 let id = id as usize;
-                assert!(id < self.user_textures.len());
-                let texture = self.user_textures[id].texture;
-                texture.expect("Should have been uploaded")
+                if id >= self.user_textures.len() {
+                    return None;
+                }
+                self.user_textures[id].texture
             }
         }
     }
@@ -419,10 +427,10 @@ impl Painter {
         }
     }
 
-    pub fn paint_jobs(
+    pub fn paint_meshes(
         &mut self,
-        bg_color: Color32,
-        jobs: PaintJobs,
+        clear_color: egui::Rgba,
+        clipped_meshes: Vec<ClippedMesh>,
         egui_texture: &Texture,
         pixels_per_point: f32,
     ) {
@@ -430,18 +438,26 @@ impl Painter {
         self.upload_user_textures();
 
         unsafe {
+            // Verified to be gamma-correct.
             gl::ClearColor(
-                bg_color[0] as f32 / 255.0,
-                bg_color[1] as f32 / 255.0,
-                bg_color[2] as f32 / 255.0,
-                bg_color[3] as f32 / 255.0,
+                clear_color[0],
+                clear_color[1],
+                clear_color[2],
+                clear_color[3],
             );
 
             gl::Clear(gl::COLOR_BUFFER_BIT);
 
             gl::Enable(gl::SCISSOR_TEST);
             gl::Enable(gl::BLEND);
-            gl::BlendFunc(gl::ONE, gl::ONE_MINUS_SRC_ALPHA); // premultiplied alpha
+            gl::BlendFuncSeparate(
+                gl::ONE,
+                gl::ONE_MINUS_SRC_ALPHA,
+                gl::ONE_MINUS_DST_ALPHA,
+                gl::ONE,
+            );
+            // egui outputs mesh in both winding orders:
+            gl::Disable(gl::CULL_FACE);
             gl::UseProgram(self.program);
             gl::ActiveTexture(gl::TEXTURE0);
 
@@ -460,66 +476,61 @@ impl Painter {
             let u_sampler_loc = gl::GetUniformLocation(self.program, u_sampler_ptr);
             gl::Uniform1i(u_sampler_loc, 0);
             gl::Viewport(0, 0, self.canvas_width as i32, self.canvas_height as i32);
+        }
 
-            for (clip_rect, triangles) in jobs {
-                gl::BindTexture(gl::TEXTURE_2D, self.get_texture(triangles.texture_id));
+        for egui::ClippedMesh(clip_rect, mesh) in clipped_meshes {
+            self.paint_mesh(
+                self.canvas_width,
+                self.canvas_height,
+                pixels_per_point,
+                clip_rect,
+                &mesh,
+            )
+        }
 
-                let clip_min_x = pixels_per_point * clip_rect.min.x;
-                let clip_min_y = pixels_per_point * clip_rect.min.y;
-                let clip_max_x = pixels_per_point * clip_rect.max.x;
-                let clip_max_y = pixels_per_point * clip_rect.max.y;
-                let clip_min_x = clamp(clip_min_x, 0.0..=screen_size_pixels.x);
-                let clip_min_y = clamp(clip_min_y, 0.0..=screen_size_pixels.y);
-                let clip_max_x = clamp(clip_max_x, clip_min_x..=screen_size_pixels.x);
-                let clip_max_y = clamp(clip_max_y, clip_min_y..=screen_size_pixels.y);
-                let clip_min_x = clip_min_x.round() as i32;
-                let clip_min_y = clip_min_y.round() as i32;
-                let clip_max_x = clip_max_x.round() as i32;
-                let clip_max_y = clip_max_y.round() as i32;
-
-                //scissor Y coordinate is from the bottom
-                gl::Scissor(
-                    clip_min_x,
-                    self.canvas_height as i32 - clip_max_y,
-                    clip_max_x - clip_min_x,
-                    clip_max_y - clip_min_y,
-                );
-
-                for triangle in triangles.split_to_u16() {
-                    self.paint_triangles(&triangle);
-                }
-                gl::Disable(gl::SCISSOR_TEST);
-            }
+        unsafe {
+            gl::Disable(gl::SCISSOR_TEST);
+            gl::Disable(gl::BLEND);
+            gl::UseProgram(0);
+            gl::ActiveTexture(0);
         }
     }
 
-    fn paint_triangles(&self, triangles: &Triangles) {
-        debug_assert!(triangles.is_valid());
-        let indices: Vec<u16> = triangles.indices.iter().map(|idx| *idx as u16).collect();
+    pub fn paint_mesh(
+        &mut self,
+        display_width: u32,
+        display_height: u32,
+        pixels_per_point: f32,
+        clip_rect: egui::Rect,
+        mesh: &Mesh,
+    ) {
+        debug_assert!(mesh.is_valid());
 
-        let mut positions: Vec<f32> = Vec::with_capacity(2 * triangles.vertices.len());
-        let mut tex_coords: Vec<f32> = Vec::with_capacity(2 * triangles.vertices.len());
-        for v in &triangles.vertices {
+        let indices: Vec<u32> = mesh.indices.iter().map(|idx| *idx as u32).collect();
+
+        let mut positions: Vec<f32> = Vec::with_capacity(2 * mesh.vertices.len());
+        let mut tex_coords: Vec<f32> = Vec::with_capacity(2 * mesh.vertices.len());
+        for v in &mesh.vertices {
             positions.push(v.pos.x);
             positions.push(v.pos.y);
             tex_coords.push(v.uv.x);
-            tex_coords.push(v.uv.y);
+            let _ = tex_coords.push(v.uv.y);
         }
 
-        let mut colors: Vec<u8> = Vec::with_capacity(4 * triangles.vertices.len());
-        for v in &triangles.vertices {
+        let mut colors: Vec<u8> = Vec::with_capacity(4 * mesh.vertices.len());
+        for v in &mesh.vertices {
             colors.push(v.color[0]);
             colors.push(v.color[1]);
             colors.push(v.color[2]);
             colors.push(v.color[3]);
         }
 
+        // Push data into buffers.
         unsafe {
             gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, self.index_buffer);
             gl::BufferData(
                 gl::ELEMENT_ARRAY_BUFFER,
-                (indices.len() * mem::size_of::<u16>()) as GLsizeiptr,
-                //mem::transmute(&indices.as_ptr()),
+                (indices.len() * mem::size_of::<u32>()) as GLsizeiptr,
                 indices.as_ptr() as *const gl::types::GLvoid,
                 gl::STREAM_DRAW,
             );
@@ -591,15 +602,44 @@ impl Painter {
                 ptr::null(),
             );
             gl::EnableVertexAttribArray(a_srgba_loc);
+        }
 
-            // --------------------------------------------------------------------
+        if let Some(texture) = self.get_texture(mesh.texture_id) {
+            // Transform clip rect to physical pixels:
+            let clip_min_x = pixels_per_point * clip_rect.min.x;
+            let clip_min_y = pixels_per_point * clip_rect.min.y;
+            let clip_max_x = pixels_per_point * clip_rect.max.x;
+            let clip_max_y = pixels_per_point * clip_rect.max.y;
 
-            gl::DrawElements(
-                gl::TRIANGLES,
-                indices.len() as i32,
-                gl::UNSIGNED_SHORT,
-                ptr::null(),
-            );
+            // Make sure clip rect can fit withing an `u32`:
+            let clip_min_x = clamp(clip_min_x, 0.0..=display_width as f32);
+            let clip_min_y = clamp(clip_min_y, 0.0..=display_height as f32);
+            let clip_max_x = clamp(clip_max_x, clip_min_x..=display_width as f32);
+            let clip_max_y = clamp(clip_max_y, clip_min_y..=display_height as f32);
+
+            let clip_min_x = clip_min_x.round() as i32;
+            let clip_min_y = clip_min_y.round() as i32;
+            let clip_max_x = clip_max_x.round() as i32;
+            let clip_max_y = clip_max_y.round() as i32;
+
+            unsafe {
+                gl::BindTexture(gl::TEXTURE_2D, texture);
+
+                //scissor Y coordinate is from the bottom
+                gl::Scissor(
+                    clip_min_x,
+                    display_height as i32 - clip_max_y,
+                    clip_max_x - clip_min_x,
+                    clip_max_y - clip_min_y,
+                );
+
+                gl::DrawElements(
+                    gl::TRIANGLES,
+                    indices.len() as i32,
+                    gl::UNSIGNED_INT,
+                    ptr::null(),
+                );
+            }
         }
     }
 }

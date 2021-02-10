@@ -1,5 +1,5 @@
 use baseview::Window;
-use egui::Color32;
+use egui::{Color32, Rgba};
 use raw_gl_context::GlContext;
 
 pub use raw_gl_context::GlConfig as RenderSettings;
@@ -29,15 +29,15 @@ impl Renderer {
 
     pub fn render(
         &mut self,
-        bg_color: Color32,
-        jobs: egui::PaintJobs,
+        bg_color: Rgba,
+        clipped_meshes: Vec<egui::ClippedMesh>,
         egui_texture: &egui::Texture,
         pixels_per_point: f32,
     ) {
         self.context.make_current();
 
         self.painter
-            .paint_jobs(bg_color, jobs, egui_texture, pixels_per_point);
+            .paint_meshes(bg_color, clipped_meshes, egui_texture, pixels_per_point);
 
         self.context.swap_buffers();
         self.context.make_not_current();
