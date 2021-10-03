@@ -1,6 +1,7 @@
 use crate::renderer::{RenderSettings, Renderer};
 use crate::Settings;
 use baseview::{Event, EventStatus, Window, WindowHandler, WindowScalePolicy};
+use copypasta::ClipboardProvider;
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 
 use std::time::Instant;
@@ -87,6 +88,7 @@ where
 
     egui_ctx: egui::CtxRef,
     raw_input: egui::RawInput,
+    clipboard_ctx: Option<copypasta::ClipboardContext>,
 
     renderer: Renderer,
     scale_factor: f32,
@@ -158,12 +160,21 @@ where
         let mut queue = Queue::new(&mut bg_color, &mut renderer, &mut repaint_requested);
         (build)(&egui_ctx, &mut queue, &mut state);
 
+        let clipboard_ctx = match copypasta::ClipboardContext::new() {
+            Ok(clipboard_ctx) => Some(clipboard_ctx),
+            Err(e) => {
+                eprintln!("Failed to initialize clipboard: {}", e);
+                None
+            }
+        };
+
         Self {
             user_state: state,
             user_update: update,
 
             egui_ctx,
             raw_input,
+            clipboard_ctx,
 
             renderer,
             scale_factor: scale,
@@ -290,6 +301,14 @@ where
             self.redraw = false;
         }
 
+        if !output.copied_text.is_empty() {
+            if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
+                if let Err(err) = clipboard_ctx.set_contents(output.copied_text) {
+                    eprintln!("Copy/Cut error: {}", err);
+                }
+            }
+        }
+
         // TODO: Handle the rest of the outputs.
     }
 
@@ -390,7 +409,24 @@ where
                 }
 
                 if pressed {
-                    if let keyboard_types::Key::Character(written) = &event.key {
+                    // VirtualKeyCode::Paste etc in winit are broken/untrustworthy,
+                    // so we detect these things manually:
+                    if is_cut_command(self.raw_input.modifiers, event.code) {
+                        self.raw_input.events.push(egui::Event::Cut);
+                    } else if is_copy_command(self.raw_input.modifiers, event.code) {
+                        self.raw_input.events.push(egui::Event::Copy);
+                    } else if is_paste_command(self.raw_input.modifiers, event.code) {
+                        if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
+                            match clipboard_ctx.get_contents() {
+                                Ok(contents) => {
+                                    self.raw_input.events.push(egui::Event::Text(contents))
+                                }
+                                Err(err) => {
+                                    eprintln!("Paste error: {}", err);
+                                }
+                            }
+                        }
+                    } else if let keyboard_types::Key::Character(written) = &event.key {
                         self.raw_input
                             .events
                             .push(egui::Event::Text(written.clone()));
@@ -465,4 +501,25 @@ pub fn translate_virtual_key_code(key: keyboard_types::Code) -> Option<egui::Key
             return None;
         }
     })
+}
+
+fn is_cut_command(modifiers: egui::Modifiers, keycode: keyboard_types::Code) -> bool {
+    (modifiers.command && keycode == keyboard_types::Code::KeyX)
+        || (cfg!(target_os = "windows")
+            && modifiers.shift
+            && keycode == keyboard_types::Code::Delete)
+}
+
+fn is_copy_command(modifiers: egui::Modifiers, keycode: keyboard_types::Code) -> bool {
+    (modifiers.command && keycode == keyboard_types::Code::KeyC)
+        || (cfg!(target_os = "windows")
+            && modifiers.ctrl
+            && keycode == keyboard_types::Code::Insert)
+}
+
+fn is_paste_command(modifiers: egui::Modifiers, keycode: keyboard_types::Code) -> bool {
+    (modifiers.command && keycode == keyboard_types::Code::KeyV)
+        || (cfg!(target_os = "windows")
+            && modifiers.shift
+            && keycode == keyboard_types::Code::Insert)
 }

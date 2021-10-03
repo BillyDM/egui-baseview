@@ -24,3 +24,4 @@ gl = { version = "0.14", optional = true }
 keyboard-types = { version = "0.5", default-features = false }
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "d399c1275522ae75f5a82caadd904df2685c8660" }
 raw-window-handle = "0.3"
+copypasta = "0.7.1"
