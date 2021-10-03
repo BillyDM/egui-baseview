@@ -92,7 +92,7 @@ where
     scale_factor: f32,
     scale_policy: WindowScalePolicy,
     bg_color: Rgba,
-    modifiers: egui::Modifiers,
+    //modifiers: egui::Modifiers,
     start_time: Instant,
     redraw: bool,
     mouse_pos: Option<Pos2>,
@@ -133,6 +133,13 @@ where
                 ),
             )),
             pixels_per_point: Some(scale),
+            modifiers: egui::Modifiers {
+                alt: false,
+                ctrl: false,
+                shift: false,
+                mac_cmd: false,
+                command: false,
+            },
             ..Default::default()
         };
 
@@ -162,13 +169,6 @@ where
             scale_factor: scale,
             scale_policy: open_settings.scale_policy,
             bg_color,
-            modifiers: egui::Modifiers {
-                alt: false,
-                ctrl: false,
-                shift: false,
-                mac_cmd: false,
-                command: false,
-            },
             start_time: Instant::now(),
             redraw: true,
             mouse_pos: None,
@@ -308,7 +308,7 @@ where
                                 pos,
                                 button,
                                 pressed: true,
-                                modifiers: self.modifiers,
+                                modifiers: self.raw_input.modifiers,
                             });
                         }
                     }
@@ -320,7 +320,7 @@ where
                                 pos,
                                 button,
                                 pressed: false,
-                                modifiers: self.modifiers,
+                                modifiers: self.raw_input.modifiers,
                             });
                         }
                     }
@@ -360,21 +360,21 @@ where
                 let pressed = event.state == keyboard_types::KeyState::Down;
 
                 match event.code {
-                    Code::ShiftLeft | Code::ShiftRight => self.modifiers.shift = pressed,
+                    Code::ShiftLeft | Code::ShiftRight => self.raw_input.modifiers.shift = pressed,
                     Code::ControlLeft | Code::ControlRight => {
-                        self.modifiers.ctrl = pressed;
+                        self.raw_input.modifiers.ctrl = pressed;
 
                         #[cfg(not(target_os = "macos"))]
                         {
-                            self.modifiers.command = pressed;
+                            self.raw_input.modifiers.command = pressed;
                         }
                     }
-                    Code::AltLeft | Code::AltRight => self.modifiers.alt = pressed,
+                    Code::AltLeft | Code::AltRight => self.raw_input.modifiers.alt = pressed,
                     Code::MetaLeft | Code::MetaRight => {
                         #[cfg(target_os = "macos")]
                         {
-                            self.modifiers.mac_cmd = pressed;
-                            self.modifiers.command = pressed;
+                            self.raw_input.modifiers.mac_cmd = pressed;
+                            self.raw_input.modifiers.command = pressed;
                         }
                         () // prevent `rustfmt` from breaking this
                     }
@@ -385,7 +385,7 @@ where
                     self.raw_input.events.push(egui::Event::Key {
                         key,
                         pressed,
-                        modifiers: self.modifiers,
+                        modifiers: self.raw_input.modifiers,
                     });
                 }
 
@@ -396,8 +396,6 @@ where
                             .push(egui::Event::Text(written.clone()));
                     }
                 }
-
-                self.raw_input.modifiers = self.modifiers;
             }
             baseview::Event::Window(event) => match event {
                 baseview::WindowEvent::Resized(window_info) => {
