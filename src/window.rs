@@ -396,6 +396,8 @@ where
                             .push(egui::Event::Text(written.clone()));
                     }
                 }
+
+                self.raw_input.modifiers = self.modifiers;
             }
             baseview::Event::Window(event) => match event {
                 baseview::WindowEvent::Resized(window_info) => {
