@@ -1,6 +1,7 @@
 use crate::renderer::{RenderSettings, Renderer};
 use crate::Settings;
 use baseview::{Event, EventStatus, Window, WindowHandler, WindowScalePolicy};
+use copypasta::ClipboardProvider;
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 
 use std::time::Instant;
@@ -87,6 +88,7 @@ where
 
     egui_ctx: egui::CtxRef,
     raw_input: egui::RawInput,
+    clipboard_ctx: Option<copypasta::ClipboardContext>,
 
     renderer: Renderer,
     scale_factor: f32,
@@ -158,12 +160,21 @@ where
         let mut queue = Queue::new(&mut bg_color, &mut renderer, &mut repaint_requested);
         (build)(&egui_ctx, &mut queue, &mut state);
 
+        let clipboard_ctx = match copypasta::ClipboardContext::new() {
+            Ok(clipboard_ctx) => Some(clipboard_ctx),
+            Err(e) => {
+                eprintln!("Failed to initialize clipboard: {}", e);
+                None
+            }
+        };
+
         Self {
             user_state: state,
             user_update: update,
 
             egui_ctx,
             raw_input,
+            clipboard_ctx,
 
             renderer,
             scale_factor: scale,
@@ -290,6 +301,14 @@ where
             self.redraw = false;
         }
 
+        if !output.copied_text.is_empty() {
+            if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
+                if let Err(err) = clipboard_ctx.set_contents(output.copied_text) {
+                    eprintln!("Copy/Cut error: {}", err);
+                }
+            }
+        }
+
         // TODO: Handle the rest of the outputs.
     }
 
@@ -390,10 +409,30 @@ where
                 }
 
                 if pressed {
-                    if let keyboard_types::Key::Character(written) = &event.key {
-                        self.raw_input
-                            .events
-                            .push(egui::Event::Text(written.clone()));
+                    // VirtualKeyCode::Paste etc in winit are broken/untrustworthy,
+                    // so we detect these things manually:
+                    if is_cut_command(self.raw_input.modifiers, event.code) {
+                        self.raw_input.events.push(egui::Event::Cut);
+                    } else if is_copy_command(self.raw_input.modifiers, event.code) {
+                        self.raw_input.events.push(egui::Event::Copy);
+                    } else if is_paste_command(self.raw_input.modifiers, event.code) {
+                        if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
+                            match clipboard_ctx.get_contents() {
+                                Ok(contents) => {
+                                    self.raw_input.events.push(egui::Event::Text(contents))
+                                }
+                                Err(err) => {
+                                    eprintln!("Paste error: {}", err);
+                                }
+                            }
+                        }
+                    } else if let keyboard_types::Key::Character(written) = &event.key {
+                        if !self.raw_input.modifiers.ctrl && !self.raw_input.modifiers.command {
+                            self.raw_input
+                                .events
+                                .push(egui::Event::Text(written.clone()));
+                            self.egui_ctx.wants_keyboard_input();
+                        }
                     }
                 }
             }
@@ -446,23 +485,84 @@ pub fn translate_virtual_key_code(key: keyboard_types::Code) -> Option<egui::Key
     use keyboard_types::Code;
 
     Some(match key {
-        Code::Escape => Key::Escape,
-        Code::Insert => Key::Insert,
-        Code::Home => Key::Home,
-        Code::Delete => Key::Delete,
-        Code::End => Key::End,
-        Code::PageDown => Key::PageDown,
-        Code::PageUp => Key::PageUp,
-        Code::ArrowLeft => Key::ArrowLeft,
-        Code::ArrowUp => Key::ArrowUp,
-        Code::ArrowRight => Key::ArrowRight,
         Code::ArrowDown => Key::ArrowDown,
+        Code::ArrowLeft => Key::ArrowLeft,
+        Code::ArrowRight => Key::ArrowRight,
+        Code::ArrowUp => Key::ArrowUp,
+
+        Code::Escape => Key::Escape,
+        Code::Tab => Key::Tab,
         Code::Backspace => Key::Backspace,
         Code::Enter => Key::Enter,
-        // Space => Key::Space,
-        Code::Tab => Key::Tab,
+        Code::Space => Key::Space,
+
+        Code::Insert => Key::Insert,
+        Code::Delete => Key::Delete,
+        Code::Home => Key::Home,
+        Code::End => Key::End,
+        Code::PageUp => Key::PageUp,
+        Code::PageDown => Key::PageDown,
+
+        Code::Digit0 | Code::Numpad0 => Key::Num0,
+        Code::Digit1 | Code::Numpad1 => Key::Num1,
+        Code::Digit2 | Code::Numpad2 => Key::Num2,
+        Code::Digit3 | Code::Numpad3 => Key::Num3,
+        Code::Digit4 | Code::Numpad4 => Key::Num4,
+        Code::Digit5 | Code::Numpad5 => Key::Num5,
+        Code::Digit6 | Code::Numpad6 => Key::Num6,
+        Code::Digit7 | Code::Numpad7 => Key::Num7,
+        Code::Digit8 | Code::Numpad8 => Key::Num8,
+        Code::Digit9 | Code::Numpad9 => Key::Num9,
+
+        Code::KeyA => Key::A,
+        Code::KeyB => Key::B,
+        Code::KeyC => Key::C,
+        Code::KeyD => Key::D,
+        Code::KeyE => Key::E,
+        Code::KeyF => Key::F,
+        Code::KeyG => Key::G,
+        Code::KeyH => Key::H,
+        Code::KeyI => Key::I,
+        Code::KeyJ => Key::J,
+        Code::KeyK => Key::K,
+        Code::KeyL => Key::L,
+        Code::KeyM => Key::M,
+        Code::KeyN => Key::N,
+        Code::KeyO => Key::O,
+        Code::KeyP => Key::P,
+        Code::KeyQ => Key::Q,
+        Code::KeyR => Key::R,
+        Code::KeyS => Key::S,
+        Code::KeyT => Key::T,
+        Code::KeyU => Key::U,
+        Code::KeyV => Key::V,
+        Code::KeyW => Key::W,
+        Code::KeyX => Key::X,
+        Code::KeyY => Key::Y,
+        Code::KeyZ => Key::Z,
         _ => {
             return None;
         }
     })
+}
+
+fn is_cut_command(modifiers: egui::Modifiers, keycode: keyboard_types::Code) -> bool {
+    (modifiers.command && keycode == keyboard_types::Code::KeyX)
+        || (cfg!(target_os = "windows")
+            && modifiers.shift
+            && keycode == keyboard_types::Code::Delete)
+}
+
+fn is_copy_command(modifiers: egui::Modifiers, keycode: keyboard_types::Code) -> bool {
+    (modifiers.command && keycode == keyboard_types::Code::KeyC)
+        || (cfg!(target_os = "windows")
+            && modifiers.ctrl
+            && keycode == keyboard_types::Code::Insert)
+}
+
+fn is_paste_command(modifiers: egui::Modifiers, keycode: keyboard_types::Code) -> bool {
+    (modifiers.command && keycode == keyboard_types::Code::KeyV)
+        || (cfg!(target_os = "windows")
+            && modifiers.shift
+            && keycode == keyboard_types::Code::Insert)
 }
