@@ -427,9 +427,12 @@ where
                             }
                         }
                     } else if let keyboard_types::Key::Character(written) = &event.key {
-                        self.raw_input
-                            .events
-                            .push(egui::Event::Text(written.clone()));
+                        if !self.raw_input.modifiers.ctrl && !self.raw_input.modifiers.command {
+                            self.raw_input
+                                .events
+                                .push(egui::Event::Text(written.clone()));
+                            self.egui_ctx.wants_keyboard_input();
+                        }
                     }
                 }
             }
@@ -482,21 +485,61 @@ pub fn translate_virtual_key_code(key: keyboard_types::Code) -> Option<egui::Key
     use keyboard_types::Code;
 
     Some(match key {
-        Code::Escape => Key::Escape,
-        Code::Insert => Key::Insert,
-        Code::Home => Key::Home,
-        Code::Delete => Key::Delete,
-        Code::End => Key::End,
-        Code::PageDown => Key::PageDown,
-        Code::PageUp => Key::PageUp,
-        Code::ArrowLeft => Key::ArrowLeft,
-        Code::ArrowUp => Key::ArrowUp,
-        Code::ArrowRight => Key::ArrowRight,
         Code::ArrowDown => Key::ArrowDown,
+        Code::ArrowLeft => Key::ArrowLeft,
+        Code::ArrowRight => Key::ArrowRight,
+        Code::ArrowUp => Key::ArrowUp,
+
+        Code::Escape => Key::Escape,
+        Code::Tab => Key::Tab,
         Code::Backspace => Key::Backspace,
         Code::Enter => Key::Enter,
-        // Space => Key::Space,
-        Code::Tab => Key::Tab,
+        Code::Space => Key::Space,
+
+        Code::Insert => Key::Insert,
+        Code::Delete => Key::Delete,
+        Code::Home => Key::Home,
+        Code::End => Key::End,
+        Code::PageUp => Key::PageUp,
+        Code::PageDown => Key::PageDown,
+
+        Code::Digit0 | Code::Numpad0 => Key::Num0,
+        Code::Digit1 | Code::Numpad1 => Key::Num1,
+        Code::Digit2 | Code::Numpad2 => Key::Num2,
+        Code::Digit3 | Code::Numpad3 => Key::Num3,
+        Code::Digit4 | Code::Numpad4 => Key::Num4,
+        Code::Digit5 | Code::Numpad5 => Key::Num5,
+        Code::Digit6 | Code::Numpad6 => Key::Num6,
+        Code::Digit7 | Code::Numpad7 => Key::Num7,
+        Code::Digit8 | Code::Numpad8 => Key::Num8,
+        Code::Digit9 | Code::Numpad9 => Key::Num9,
+
+        Code::KeyA => Key::A,
+        Code::KeyB => Key::B,
+        Code::KeyC => Key::C,
+        Code::KeyD => Key::D,
+        Code::KeyE => Key::E,
+        Code::KeyF => Key::F,
+        Code::KeyG => Key::G,
+        Code::KeyH => Key::H,
+        Code::KeyI => Key::I,
+        Code::KeyJ => Key::J,
+        Code::KeyK => Key::K,
+        Code::KeyL => Key::L,
+        Code::KeyM => Key::M,
+        Code::KeyN => Key::N,
+        Code::KeyO => Key::O,
+        Code::KeyP => Key::P,
+        Code::KeyQ => Key::Q,
+        Code::KeyR => Key::R,
+        Code::KeyS => Key::S,
+        Code::KeyT => Key::T,
+        Code::KeyU => Key::U,
+        Code::KeyV => Key::V,
+        Code::KeyW => Key::W,
+        Code::KeyX => Key::X,
+        Code::KeyY => Key::Y,
+        Code::KeyZ => Key::Z,
         _ => {
             return None;
         }
