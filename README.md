@@ -76,4 +76,3 @@ Examples of how to use this library for audio plugins can be found here:
 [`baseview`]: https://github.com/RustAudio/baseview
 [`egui`]: https://github.com/emilk/egui
 [`egui_baseview_test_vst2`]: https://github.com/DGriffin91/egui_baseview_test_vst2
-
