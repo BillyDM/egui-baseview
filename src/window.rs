@@ -345,27 +345,31 @@ where
                     }
                 }
                 baseview::MouseEvent::WheelScrolled(scroll_delta) => {
-                    let (lines_x, lines_y) = match scroll_delta {
-                        baseview::ScrollDelta::Lines { x, y } => (*x, *y),
-                        baseview::ScrollDelta::Pixels { x, y } => (
-                            if *x < 0.0 {
-                                -1.0
-                            } else if *x > 1.0 {
-                                1.0
+                    let mut delta = match scroll_delta {
+                        baseview::ScrollDelta::Lines { x, y } => {
+                            let points_per_scroll_line = 50.0; // Scroll speed decided by consensus: https://github.com/emilk/egui/issues/461
+                            egui::vec2(*x, *y) * points_per_scroll_line
+                        }
+                        baseview::ScrollDelta::Pixels { x, y } => {
+                            if let Some(pixels_per_point) = self.raw_input.pixels_per_point {
+                                egui::vec2(*x, *y) / pixels_per_point
                             } else {
-                                0.0
-                            },
-                            if *y < 0.0 {
-                                -1.0
-                            } else if *y > 1.0 {
-                                1.0
-                            } else {
-                                0.0
-                            },
-                        ),
+                                egui::vec2(*x, *y)
+                            }
+                        }
                     };
+                    if cfg!(target_os = "macos") {
+                        // This is still buggy in winit despite
+                        // https://github.com/rust-windowing/winit/issues/1695 being closed
+                        delta.x *= -1.0;
+                    }
 
-                    self.raw_input.scroll_delta = vec2(lines_x as f32, lines_y as f32);
+                    if self.raw_input.modifiers.ctrl || self.raw_input.modifiers.command {
+                        // Treat as zoom instead:
+                        self.raw_input.zoom_delta *= (delta.y / 200.0).exp();
+                    } else {
+                        self.raw_input.scroll_delta += delta;
+                    }
                 }
                 baseview::MouseEvent::CursorLeft => {
                     self.mouse_pos = None;
