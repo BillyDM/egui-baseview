@@ -1,8 +1,8 @@
 use crate::renderer::{RenderSettings, Renderer};
 use crate::Settings;
-use baseview::{Event, EventStatus, Window, WindowHandler, WindowScalePolicy};
+use baseview::{Event, EventStatus, Window, WindowHandle, WindowHandler, WindowScalePolicy};
 use copypasta::ClipboardProvider;
-use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
+use raw_window_handle::HasRawWindowHandle;
 
 use std::time::Instant;
 
@@ -12,6 +12,7 @@ pub struct Queue<'a> {
     bg_color: &'a mut Rgba,
     renderer: &'a mut Renderer,
     repaint_requested: &'a mut bool,
+    close_requested: &'a mut bool,
 }
 
 impl<'a> Queue<'a> {
@@ -19,11 +20,13 @@ impl<'a> Queue<'a> {
         bg_color: &'a mut Rgba,
         renderer: &'a mut Renderer,
         repaint_requested: &'a mut bool,
+        close_requested: &'a mut bool,
     ) -> Self {
         Self {
             bg_color,
             renderer,
             repaint_requested,
+            close_requested,
         }
     }
 
@@ -51,6 +54,11 @@ impl<'a> Queue<'a> {
     /// Request to repaint the UI on the next frame.
     pub fn request_repaint(&mut self) {
         *self.repaint_requested = true;
+    }
+
+    /// Close the window.
+    pub fn close_window(&mut self) {
+        *self.close_requested = true;
     }
 }
 
@@ -83,7 +91,7 @@ where
     U: FnMut(&egui::CtxRef, &mut Queue, &mut State),
     U: 'static + Send,
 {
-    user_state: State,
+    user_state: Option<State>,
     user_update: U,
 
     egui_ctx: egui::CtxRef,
@@ -98,6 +106,7 @@ where
     start_time: Instant,
     redraw: bool,
     mouse_pos: Option<Pos2>,
+    close_requested: bool,
 }
 
 impl<State, U> EguiWindow<State, U>
@@ -157,7 +166,13 @@ where
         let mut bg_color = Rgba::BLACK;
 
         let mut repaint_requested = false;
-        let mut queue = Queue::new(&mut bg_color, &mut renderer, &mut repaint_requested);
+        let mut close_requested = false;
+        let mut queue = Queue::new(
+            &mut bg_color,
+            &mut renderer,
+            &mut repaint_requested,
+            &mut close_requested,
+        );
         (build)(&egui_ctx, &mut queue, &mut state);
 
         let clipboard_ctx = match copypasta::ClipboardContext::new() {
@@ -169,7 +184,7 @@ where
         };
 
         Self {
-            user_state: state,
+            user_state: Some(state),
             user_update: update,
 
             egui_ctx,
@@ -183,6 +198,7 @@ where
             start_time: Instant::now(),
             redraw: true,
             mouse_pos: None,
+            close_requested,
         }
     }
 
@@ -195,7 +211,13 @@ where
     /// call `ctx.set_fonts()`. Optional.
     /// * `update` - Called before each frame. Here you should update the state of your
     /// application and build the UI.
-    pub fn open_parented<P, B>(parent: &P, settings: Settings, state: State, build: B, update: U)
+    pub fn open_parented<P, B>(
+        parent: &P,
+        settings: Settings,
+        state: State,
+        build: B,
+        update: U,
+    ) -> WindowHandle
     where
         P: HasRawWindowHandle,
         B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
@@ -226,7 +248,7 @@ where
         state: State,
         build: B,
         update: U,
-    ) -> RawWindowHandle
+    ) -> WindowHandle
     where
         B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
         B: 'static + Send,
@@ -273,43 +295,51 @@ where
     U: FnMut(&egui::CtxRef, &mut Queue, &mut State),
     U: 'static + Send,
 {
-    fn on_frame(&mut self, _window: &mut Window) {
-        self.raw_input.time = Some(self.start_time.elapsed().as_nanos() as f64 * 1e-9);
-        self.egui_ctx.begin_frame(self.raw_input.take());
+    fn on_frame(&mut self, window: &mut Window) {
+        if let Some(state) = &mut self.user_state {
+            self.raw_input.time = Some(self.start_time.elapsed().as_nanos() as f64 * 1e-9);
+            self.egui_ctx.begin_frame(self.raw_input.take());
 
-        let mut repaint_requested = false;
-        let mut queue = Queue::new(
-            &mut self.bg_color,
-            &mut self.renderer,
-            &mut repaint_requested,
-        );
-
-        (self.user_update)(&self.egui_ctx, &mut queue, &mut self.user_state);
-
-        let (output, paint_cmds) = self.egui_ctx.end_frame();
-
-        if output.needs_repaint || self.redraw || repaint_requested {
-            let paint_jobs = self.egui_ctx.tessellate(paint_cmds);
-
-            self.renderer.render(
-                self.bg_color,
-                paint_jobs,
-                &self.egui_ctx.texture(),
-                self.scale_factor,
+            let mut repaint_requested = false;
+            let mut queue = Queue::new(
+                &mut self.bg_color,
+                &mut self.renderer,
+                &mut repaint_requested,
+                &mut self.close_requested,
             );
 
-            self.redraw = false;
-        }
+            (self.user_update)(&self.egui_ctx, &mut queue, state);
 
-        if !output.copied_text.is_empty() {
-            if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
-                if let Err(err) = clipboard_ctx.set_contents(output.copied_text) {
-                    eprintln!("Copy/Cut error: {}", err);
+            let (output, paint_cmds) = self.egui_ctx.end_frame();
+
+            if output.needs_repaint || self.redraw || repaint_requested {
+                let paint_jobs = self.egui_ctx.tessellate(paint_cmds);
+
+                self.renderer.render(
+                    self.bg_color,
+                    paint_jobs,
+                    &self.egui_ctx.texture(),
+                    self.scale_factor,
+                );
+
+                self.redraw = false;
+            }
+
+            if !output.copied_text.is_empty() {
+                if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
+                    if let Err(err) = clipboard_ctx.set_contents(output.copied_text) {
+                        eprintln!("Copy/Cut error: {}", err);
+                    }
                 }
             }
-        }
 
-        // TODO: Handle the rest of the outputs.
+            if self.close_requested {
+                self.close_requested = false;
+                window.close();
+            }
+
+            // TODO: Handle the rest of the outputs.
+        }
     }
 
     fn on_event(&mut self, _window: &mut Window, event: Event) -> EventStatus {
