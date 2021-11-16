@@ -22,7 +22,7 @@ fn main() {
         |_egui_ctx: &CtxRef, _queue: &mut Queue, _state: &mut State| {},
         // Called before each frame. Here you should update the state of your
         // application and build the UI.
-        |egui_ctx: &CtxRef, _queue: &mut Queue, state: &mut State| {
+        |egui_ctx: &CtxRef, queue: &mut Queue, state: &mut State| {
             egui::Window::new("egui-baseview simple demo").show(&egui_ctx, |ui| {
                 ui.heading("My Egui Application");
                 ui.horizontal(|ui| {
@@ -34,6 +34,9 @@ fn main() {
                     state.age += 1;
                 }
                 ui.label(format!("Hello '{}', age {}", state.name, state.age));
+                if ui.button("close window").clicked() {
+                    queue.close_window();
+                }
             });
         },
     );
@@ -50,5 +53,11 @@ impl State {
             name: String::from(""),
             age: 30,
         }
+    }
+}
+
+impl Drop for State {
+    fn drop(&mut self) {
+        println!("Window is closing!");
     }
 }
