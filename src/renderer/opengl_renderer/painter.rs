@@ -34,7 +34,7 @@
 
 use gl::types::*;
 use std::ffi::CString;
-use std::mem;
+use std::mem::{self, MaybeUninit};
 use std::os::raw::c_void;
 use std::ptr;
 use std::str;
@@ -167,7 +167,7 @@ fn compile_shader(src: &str, ty: GLenum) -> GLuint {
         if status != (gl::TRUE as GLint) {
             let mut len = 0;
             gl::GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
-            let mut buf = Vec::with_capacity(len as usize);
+            let mut buf: Vec<MaybeUninit<u8>> = Vec::with_capacity(len as usize);
             buf.set_len((len as usize) - 1); // subtract 1 to skip the trailing null character
             gl::GetShaderInfoLog(
                 shader,
@@ -177,7 +177,8 @@ fn compile_shader(src: &str, ty: GLenum) -> GLuint {
             );
             panic!(
                 "{}",
-                str::from_utf8(&buf).expect("ShaderInfoLog not valid utf8")
+                str::from_utf8(&*(buf.as_slice() as *const [MaybeUninit<u8>] as *const [u8]))
+                    .expect("ShaderInfoLog not valid utf8")
             );
         }
     }
@@ -198,7 +199,7 @@ fn link_program(vs: GLuint, fs: GLuint) -> GLuint {
         if status != (gl::TRUE as GLint) {
             let mut len: GLint = 0;
             gl::GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
-            let mut buf = Vec::with_capacity(len as usize);
+            let mut buf: Vec<MaybeUninit<u8>> = Vec::with_capacity(len as usize);
             buf.set_len((len as usize) - 1); // subtract 1 to skip the trailing null character
             gl::GetProgramInfoLog(
                 program,
@@ -208,7 +209,8 @@ fn link_program(vs: GLuint, fs: GLuint) -> GLuint {
             );
             panic!(
                 "{}",
-                str::from_utf8(&buf).expect("ProgramInfoLog not valid utf8")
+                str::from_utf8(&*(buf.as_slice() as *const [MaybeUninit<u8>] as *const [u8]))
+                    .expect("ProgramInfoLog not valid utf8")
             );
         }
         program
@@ -331,7 +333,7 @@ impl Painter {
     fn upload_user_textures(&mut self) {
         unsafe {
             for user_texture in &mut self.user_textures {
-                if !user_texture.texture.is_none() && !user_texture.dirty {
+                if user_texture.texture.is_some() && !user_texture.dirty {
                     continue;
                 }
                 let pixels = std::mem::take(&mut user_texture.pixels);

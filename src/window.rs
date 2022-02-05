@@ -431,7 +431,6 @@ where
                             self.raw_input.modifiers.mac_cmd = pressed;
                             self.raw_input.modifiers.command = pressed;
                         }
-                        () // prevent `rustfmt` from breaking this
                     }
                     _ => (),
                 }
