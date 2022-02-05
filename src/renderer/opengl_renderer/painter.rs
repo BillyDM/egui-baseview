@@ -290,13 +290,13 @@ impl Painter {
         id
     }
 
-    fn upload_egui_texture(&mut self, texture: &FontImage) {
-        if self.egui_texture_version == Some(texture.version) {
+    fn upload_egui_font_image(&mut self, font_image: &FontImage) {
+        if self.egui_texture_version == Some(font_image.version) {
             return; // No change
         }
 
-        let mut pixels: Vec<u8> = Vec::with_capacity(texture.pixels.len() * 4);
-        for &alpha in &texture.pixels {
+        let mut pixels: Vec<u8> = Vec::with_capacity(font_image.pixels.len() * 4);
+        for &alpha in &font_image.pixels {
             let srgba = Color32::from_white_alpha(alpha);
             pixels.push(srgba.r());
             pixels.push(srgba.g());
@@ -316,15 +316,15 @@ impl Painter {
                 gl::TEXTURE_2D,
                 level,
                 internal_format as i32,
-                texture.width as i32,
-                texture.height as i32,
+                font_image.width as i32,
+                font_image.height as i32,
                 border,
                 src_format,
                 src_type,
                 pixels.as_ptr() as *const c_void,
             );
 
-            self.egui_texture_version = Some(texture.version);
+            self.egui_texture_version = Some(font_image.version);
         }
     }
 
@@ -430,10 +430,10 @@ impl Painter {
         &mut self,
         clear_color: egui::Rgba,
         clipped_meshes: Vec<ClippedMesh>,
-        egui_texture: &FontImage,
+        egui_font_image: &FontImage,
         pixels_per_point: f32,
     ) {
-        self.upload_egui_texture(egui_texture);
+        self.upload_egui_font_image(egui_font_image);
         self.upload_user_textures();
 
         unsafe {

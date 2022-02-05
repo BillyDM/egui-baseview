@@ -31,13 +31,13 @@ impl Renderer {
         &mut self,
         bg_color: Rgba,
         clipped_meshes: Vec<egui::ClippedMesh>,
-        egui_texture: &egui::FontImage,
+        egui_font_image: &egui::FontImage,
         pixels_per_point: f32,
     ) {
         self.context.make_current();
 
         self.painter
-            .paint_meshes(bg_color, clipped_meshes, egui_texture, pixels_per_point);
+            .paint_meshes(bg_color, clipped_meshes, egui_font_image, pixels_per_point);
 
         self.context.swap_buffers();
         self.context.make_not_current();

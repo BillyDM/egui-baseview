@@ -318,7 +318,7 @@ where
                 self.renderer.render(
                     self.bg_color,
                     paint_jobs,
-                    &self.egui_ctx.texture(),
+                    &self.egui_ctx.font_image(),
                     self.scale_factor,
                 );
 
