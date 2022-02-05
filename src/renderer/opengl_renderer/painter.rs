@@ -40,7 +40,7 @@ use std::ptr;
 use std::str;
 
 use egui::{
-    paint::{ClippedMesh, Color32, Mesh, Texture},
+    epaint::{ClippedMesh, Color32, FontImage, Mesh},
     vec2,
 };
 
@@ -290,7 +290,7 @@ impl Painter {
         id
     }
 
-    fn upload_egui_texture(&mut self, texture: &Texture) {
+    fn upload_egui_texture(&mut self, texture: &FontImage) {
         if self.egui_texture_version == Some(texture.version) {
             return; // No change
         }
@@ -430,7 +430,7 @@ impl Painter {
         &mut self,
         clear_color: egui::Rgba,
         clipped_meshes: Vec<ClippedMesh>,
-        egui_texture: &Texture,
+        egui_texture: &FontImage,
         pixels_per_point: f32,
     ) {
         self.upload_egui_texture(egui_texture);

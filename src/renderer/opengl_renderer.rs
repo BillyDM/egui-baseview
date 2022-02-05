@@ -31,7 +31,7 @@ impl Renderer {
         &mut self,
         bg_color: Rgba,
         clipped_meshes: Vec<egui::ClippedMesh>,
-        egui_texture: &egui::Texture,
+        egui_texture: &egui::FontImage,
         pixels_per_point: f32,
     ) {
         self.context.make_current();

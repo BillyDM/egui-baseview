@@ -396,9 +396,11 @@ where
 
                     if self.raw_input.modifiers.ctrl || self.raw_input.modifiers.command {
                         // Treat as zoom instead:
-                        self.raw_input.zoom_delta *= (delta.y / 200.0).exp();
+                        self.raw_input
+                            .events
+                            .push(egui::Event::Zoom((delta.y / 200.0).exp()));
                     } else {
-                        self.raw_input.scroll_delta += delta;
+                        self.raw_input.events.push(egui::Event::Scroll(delta));
                     }
                 }
                 baseview::MouseEvent::CursorLeft => {
