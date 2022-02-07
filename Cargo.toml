@@ -15,9 +15,9 @@ readme = "README.md"
 
 [dependencies]
 egui = "0.16"
-raw-gl-context = { version = "0.1", optional = true }
 gl = { version = "0.14" }
 keyboard-types = { version = "0.6.1", default-features = false }
-baseview = { git = "https://github.com/RustAudio/baseview.git" }
-raw-window-handle = "0.3"
+# TODO: Move this back to RustAudio/baseview once the PR gets merged
+baseview = { git = "https://github.com/robbert-vdh/baseview.git", branch = "feature/merge-raw-gl-context", features = ["opengl"]  }
+raw-window-handle = "0.4"
 copypasta = "0.7.1"

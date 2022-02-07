@@ -1,8 +1,8 @@
+use baseview::gl::GlContext;
 use baseview::Window;
 use egui::{Color32, Rgba};
-use raw_gl_context::GlContext;
 
-pub use raw_gl_context::GlConfig as RenderSettings;
+pub use baseview::gl::GlConfig as RenderSettings;
 
 mod painter;
 use painter::Painter;
@@ -13,18 +13,18 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(window: &Window, render_settings: RenderSettings, canvas_size: (u32, u32)) -> Self {
-        let context = GlContext::create(window, render_settings).unwrap();
+    pub fn new(window: &Window, canvas_size: (u32, u32)) -> Option<Self> {
+        let context = window.gl_context()?;
 
-        context.make_current();
+        unsafe { context.make_current() };
 
         gl::load_with(|s| context.get_proc_address(s) as _);
 
         let painter = Painter::new(canvas_size.0, canvas_size.1);
 
-        context.make_not_current();
+        unsafe { context.make_not_current() };
 
-        Self { context, painter }
+        Some(Self { context, painter })
     }
 
     pub fn render(
@@ -34,13 +34,13 @@ impl Renderer {
         egui_font_image: &egui::FontImage,
         pixels_per_point: f32,
     ) {
-        self.context.make_current();
+        unsafe { self.context.make_current() };
 
         self.painter
             .paint_meshes(bg_color, clipped_meshes, egui_font_image, pixels_per_point);
 
         self.context.swap_buffers();
-        self.context.make_not_current();
+        unsafe { self.context.make_not_current() };
     }
 
     pub fn new_user_texture(

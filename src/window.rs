@@ -1,6 +1,7 @@
-use crate::renderer::{RenderSettings, Renderer};
-use crate::Settings;
-use baseview::{Event, EventStatus, Window, WindowHandle, WindowHandler, WindowScalePolicy};
+use crate::renderer::Renderer;
+use baseview::{
+    Event, EventStatus, Window, WindowHandle, WindowHandler, WindowOpenOptions, WindowScalePolicy,
+};
 use copypasta::ClipboardProvider;
 use raw_window_handle::HasRawWindowHandle;
 
@@ -69,17 +70,17 @@ struct OpenSettings {
 }
 
 impl OpenSettings {
-    fn new(settings: &Settings) -> Self {
+    fn new(settings: &WindowOpenOptions) -> Self {
         // WindowScalePolicy does not implement copy/clone.
-        let scale_policy = match &settings.window.scale {
+        let scale_policy = match &settings.scale {
             WindowScalePolicy::SystemScaleFactor => WindowScalePolicy::SystemScaleFactor,
             WindowScalePolicy::ScaleFactor(scale) => WindowScalePolicy::ScaleFactor(*scale),
         };
 
         Self {
             scale_policy,
-            logical_width: settings.window.size.width as f64,
-            logical_height: settings.window.size.height as f64,
+            logical_width: settings.size.width as f64,
+            logical_height: settings.size.height as f64,
         }
     }
 }
@@ -118,15 +119,19 @@ where
     fn new<B>(
         window: &mut baseview::Window<'_>,
         open_settings: OpenSettings,
-        mut render_settings: Option<RenderSettings>,
         mut build: B,
         update: U,
         mut state: State,
-    ) -> EguiWindow<State, U>
+    ) -> Option<EguiWindow<State, U>>
     where
         B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
         B: 'static + Send,
     {
+        // This only works for windows with OpenGL contexts attached to them
+        if window.gl_context().is_none() {
+            return None;
+        }
+
         // Assume scale for now until there is an event with a new one.
         let scale = match open_settings.scale_policy {
             WindowScalePolicy::ScaleFactor(scale) => scale,
@@ -156,12 +161,12 @@ where
 
         let mut renderer = Renderer::new(
             window,
-            render_settings.take().unwrap(),
             (
                 (open_settings.logical_width * scale as f64).round() as u32,
                 (open_settings.logical_height * scale as f64).round() as u32,
             ),
-        );
+        )
+        .expect("Somehow the window was created without an OpenGL context");
 
         let mut bg_color = Rgba::BLACK;
 
@@ -183,7 +188,7 @@ where
             }
         };
 
-        Self {
+        Some(Self {
             user_state: Some(state),
             user_update: update,
 
@@ -199,7 +204,7 @@ where
             redraw: true,
             mouse_pos: None,
             close_requested,
-        }
+        })
     }
 
     /// Open a new child window.
@@ -211,28 +216,34 @@ where
     /// call `ctx.set_fonts()`. Optional.
     /// * `update` - Called before each frame. Here you should update the state of your
     /// application and build the UI.
+    ///
+    /// Returns a `None` if the window settings did not contain an OpenGL config.
     pub fn open_parented<P, B>(
         parent: &P,
-        settings: Settings,
+        settings: WindowOpenOptions,
         state: State,
         build: B,
         update: U,
-    ) -> WindowHandle
+    ) -> Option<WindowHandle>
     where
         P: HasRawWindowHandle,
         B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
         B: 'static + Send,
     {
-        let open_settings = OpenSettings::new(&settings);
-        let render_settings = Some(settings.render_settings);
+        if settings.gl_config.is_some() {
+            let open_settings = OpenSettings::new(&settings);
 
-        Window::open_parented(
-            parent,
-            settings.window,
-            move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
-                EguiWindow::new(window, open_settings, render_settings, build, update, state)
-            },
-        )
+            Some(Window::open_parented(
+                parent,
+                settings,
+                move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
+                    EguiWindow::new(window, open_settings, build, update, state)
+                        .expect("Somehow the window got created without an OpenGL context")
+                },
+            ))
+        } else {
+            None
+        }
     }
 
     /// Open a new window as if it had a parent window.
@@ -243,25 +254,31 @@ where
     /// call `ctx.set_fonts()`. Optional.
     /// * `update` - Called before each frame. Here you should update the state of your
     /// application and build the UI.
+    ///
+    /// Returns a `None` if the window settings did not contain an OpenGL config.
     pub fn open_as_if_parented<B>(
-        settings: Settings,
+        settings: WindowOpenOptions,
         state: State,
         build: B,
         update: U,
-    ) -> WindowHandle
+    ) -> Option<WindowHandle>
     where
         B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
         B: 'static + Send,
     {
-        let open_settings = OpenSettings::new(&settings);
-        let render_settings = Some(settings.render_settings);
+        if settings.gl_config.is_some() {
+            let open_settings = OpenSettings::new(&settings);
 
-        Window::open_as_if_parented(
-            settings.window,
-            move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
-                EguiWindow::new(window, open_settings, render_settings, build, update, state)
-            },
-        )
+            Some(Window::open_as_if_parented(
+                settings,
+                move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
+                    EguiWindow::new(window, open_settings, build, update, state)
+                        .expect("Somehow the window got created without an OpenGL context")
+                },
+            ))
+        } else {
+            None
+        }
     }
 
     /// Open a new window that blocks the current thread until the window is destroyed.
@@ -272,20 +289,24 @@ where
     /// call `ctx.set_fonts()`. Optional.
     /// * `update` - Called before each frame. Here you should update the state of your
     /// application and build the UI.
-    pub fn open_blocking<B>(settings: Settings, state: State, build: B, update: U)
+    ///
+    /// Returns immediately if the window settings did not contain an OpenGL config.
+    pub fn open_blocking<B>(settings: WindowOpenOptions, state: State, build: B, update: U)
     where
         B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
         B: 'static + Send,
     {
-        let open_settings = OpenSettings::new(&settings);
-        let render_settings = Some(settings.render_settings);
+        if settings.gl_config.is_some() {
+            let open_settings = OpenSettings::new(&settings);
 
-        Window::open_blocking(
-            settings.window,
-            move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
-                EguiWindow::new(window, open_settings, render_settings, build, update, state)
-            },
-        )
+            Window::open_blocking(
+                settings,
+                move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
+                    EguiWindow::new(window, open_settings, build, update, state)
+                        .expect("Somehow the window got created without an OpenGL context")
+                },
+            )
+        }
     }
 }
 
