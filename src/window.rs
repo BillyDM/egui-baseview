@@ -128,9 +128,7 @@ where
         B: 'static + Send,
     {
         // This only works for windows with OpenGL contexts attached to them
-        if window.gl_context().is_none() {
-            return None;
-        }
+        window.gl_context()?;
 
         // Assume scale for now until there is an event with a new one.
         let scale = match open_settings.scale_policy {
@@ -337,6 +335,7 @@ where
                 let paint_jobs = self.egui_ctx.tessellate(paint_cmds);
 
                 self.renderer.render(
+                    window.gl_context().unwrap(),
                     self.bg_color,
                     paint_jobs,
                     &self.egui_ctx.font_image(),
