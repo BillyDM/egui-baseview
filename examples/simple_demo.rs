@@ -1,5 +1,5 @@
 use baseview::{Size, WindowOpenOptions, WindowScalePolicy};
-use egui::CtxRef;
+use egui::Context;
 use egui_baseview::{EguiWindow, Queue};
 
 fn main() {
@@ -17,10 +17,10 @@ fn main() {
         state,
         // Called once before the first frame. Allows you to do setup code and to
         // call `ctx.set_fonts()`. Optional.
-        |_egui_ctx: &CtxRef, _queue: &mut Queue, _state: &mut State| {},
+        |_egui_ctx: &Context, _queue: &mut Queue, _state: &mut State| {},
         // Called before each frame. Here you should update the state of your
         // application and build the UI.
-        |egui_ctx: &CtxRef, queue: &mut Queue, state: &mut State| {
+        |egui_ctx: &Context, queue: &mut Queue, state: &mut State| {
             egui::Window::new("egui-baseview simple demo").show(&egui_ctx, |ui| {
                 ui.heading("My Egui Application");
                 ui.horizontal(|ui| {

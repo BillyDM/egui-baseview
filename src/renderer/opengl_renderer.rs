@@ -33,13 +33,13 @@ impl Renderer {
         context: &GlContext,
         bg_color: Rgba,
         clipped_meshes: Vec<egui::ClippedMesh>,
-        egui_font_image: &egui::FontImage,
+        texture_delta: &egui::TexturesDelta,
         pixels_per_point: f32,
     ) {
         unsafe { context.make_current() };
 
         self.painter
-            .paint_meshes(bg_color, clipped_meshes, egui_font_image, pixels_per_point);
+            .paint_meshes(bg_color, clipped_meshes, texture_delta, pixels_per_point);
 
         context.swap_buffers();
         unsafe { context.make_not_current() };

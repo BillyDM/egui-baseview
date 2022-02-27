@@ -37,7 +37,8 @@ impl<'a> Queue<'a> {
         *self.bg_color = bg_color;
     }
 
-    /// Create a new custom texture.
+    /// Create a new custom texture. Instead of using this and [Self::update_user_texture_data()],
+    /// you can also use the texture methods on the egui context.
     pub fn new_user_texture(
         &mut self,
         size: (usize, usize),
@@ -90,13 +91,13 @@ impl OpenSettings {
 pub struct EguiWindow<State, U>
 where
     State: 'static + Send,
-    U: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+    U: FnMut(&egui::Context, &mut Queue, &mut State),
     U: 'static + Send,
 {
     user_state: Option<State>,
     user_update: U,
 
-    egui_ctx: egui::CtxRef,
+    egui_ctx: egui::Context,
     raw_input: egui::RawInput,
     clipboard_ctx: Option<copypasta::ClipboardContext>,
 
@@ -114,7 +115,7 @@ where
 impl<State, U> EguiWindow<State, U>
 where
     State: 'static + Send,
-    U: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+    U: FnMut(&egui::Context, &mut Queue, &mut State),
     U: 'static + Send,
 {
     fn new<B>(
@@ -125,7 +126,7 @@ where
         mut state: State,
     ) -> Option<EguiWindow<State, U>>
     where
-        B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+        B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
         // This only works for windows with OpenGL contexts attached to them
@@ -137,7 +138,7 @@ where
             WindowScalePolicy::SystemScaleFactor => 1.0,
         } as f32;
 
-        let egui_ctx = egui::CtxRef::default();
+        let egui_ctx = egui::Context::default();
 
         let raw_input = egui::RawInput {
             screen_rect: Some(Rect::from_min_size(
@@ -226,7 +227,7 @@ where
     ) -> Option<WindowHandle>
     where
         P: HasRawWindowHandle,
-        B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+        B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
         if settings.gl_config.is_some() {
@@ -262,7 +263,7 @@ where
         update: U,
     ) -> Option<WindowHandle>
     where
-        B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+        B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
         if settings.gl_config.is_some() {
@@ -292,7 +293,7 @@ where
     /// Returns immediately if the window settings did not contain an OpenGL config.
     pub fn open_blocking<B>(settings: WindowOpenOptions, state: State, build: B, update: U)
     where
-        B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+        B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
         if settings.gl_config.is_some() {
@@ -319,7 +320,7 @@ where
 impl<State, U> WindowHandler for EguiWindow<State, U>
 where
     State: 'static + Send,
-    U: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+    U: FnMut(&egui::Context, &mut Queue, &mut State),
     U: 'static + Send,
 {
     fn on_frame(&mut self, window: &mut Window) {
@@ -337,25 +338,26 @@ where
 
             (self.user_update)(&self.egui_ctx, &mut queue, state);
 
-            let (output, paint_cmds) = self.egui_ctx.end_frame();
+            let output = self.egui_ctx.end_frame();
+            let platform_output = output.platform_output;
 
             if output.needs_repaint || self.redraw || repaint_requested {
-                let paint_jobs = self.egui_ctx.tessellate(paint_cmds);
+                let paint_jobs = self.egui_ctx.tessellate(output.shapes);
 
                 self.renderer.render(
                     window.gl_context().unwrap(),
                     self.bg_color,
                     paint_jobs,
-                    &self.egui_ctx.font_image(),
+                    &output.textures_delta,
                     self.scale_factor,
                 );
 
                 self.redraw = false;
             }
 
-            if !output.copied_text.is_empty() {
+            if !platform_output.copied_text.is_empty() {
                 if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
-                    if let Err(err) = clipboard_ctx.set_contents(output.copied_text) {
+                    if let Err(err) = clipboard_ctx.set_contents(platform_output.copied_text) {
                         eprintln!("Copy/Cut error: {}", err);
                     }
                 }
@@ -366,7 +368,7 @@ where
                 window.close();
             }
 
-            // TODO: Handle the rest of the outputs.
+            // TODO: Handle the rest of the platform outputs
         }
     }
 

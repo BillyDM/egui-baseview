@@ -33,6 +33,7 @@
 */
 
 use gl::types::*;
+use std::collections::HashMap;
 use std::ffi::CString;
 use std::mem::{self, MaybeUninit};
 use std::os::raw::c_void;
@@ -40,8 +41,8 @@ use std::ptr;
 use std::str;
 
 use egui::{
-    epaint::{ClippedMesh, Color32, FontImage, Mesh},
-    vec2,
+    epaint::{ClippedMesh, Color32, Mesh},
+    vec2, TexturesDelta,
 };
 
 #[derive(Default)]
@@ -143,10 +144,12 @@ pub struct Painter {
     color_buffer: GLuint,
     canvas_width: u32,
     canvas_height: u32,
-    egui_texture: GLuint,
-    egui_texture_version: Option<u64>,
     vert_shader: GLuint,
     frag_shader: GLuint,
+    // As of egui 0.17 egui can manage multiple textures, which sort of avoids the need for having
+    // these user textures. We need to keep track of which OpenGL texture belongs to which
+    // [egui::TextureId::Managed] ID.
+    egui_textures: HashMap<u64, GLuint>,
     user_textures: Vec<UserTexture>,
 }
 
@@ -220,14 +223,6 @@ fn link_program(vs: GLuint, fs: GLuint) -> GLuint {
 impl Painter {
     pub(crate) fn new(canvas_width: u32, canvas_height: u32) -> Painter {
         unsafe {
-            let mut egui_texture = 0;
-            gl::GenTextures(1, &mut egui_texture);
-            gl::BindTexture(gl::TEXTURE_2D, egui_texture);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
-
             let vert_shader = compile_shader(VS_SRC, gl::VERTEX_SHADER);
             let frag_shader = compile_shader(FS_SRC, gl::FRAGMENT_SHADER);
 
@@ -251,11 +246,10 @@ impl Painter {
                 pos_buffer,
                 tc_buffer,
                 color_buffer,
-                egui_texture,
                 vert_shader,
                 frag_shader,
-                egui_texture_version: None,
-                user_textures: Default::default(),
+                egui_textures: HashMap::new(),
+                user_textures: Vec::new(),
             }
         }
     }
@@ -292,41 +286,124 @@ impl Painter {
         id
     }
 
-    fn upload_egui_font_image(&mut self, font_image: &FontImage) {
-        if self.egui_texture_version == Some(font_image.version) {
-            return; // No change
+    fn upload_texture_delta(&mut self, texture_delta: &TexturesDelta) {
+        // As of egui 0.17, egui can manage multiple textures, and the texture updates themsleves
+        // are deltas
+        for (egui_texture_id, delta) in &texture_delta.set {
+            let egui_texture_id = match egui_texture_id {
+                egui::TextureId::Managed(id) => *id,
+                // This shouldn't be reachable
+                egui::TextureId::User(_) => {
+                    eprintln!("Texture manager tried to set a user texture");
+                    continue;
+                }
+            };
+
+            // When egui sets a managed texture it may create a new one or it may update (part of)
+            // an existing texture
+            let gl_texture_id = *self
+                .egui_textures
+                .entry(egui_texture_id)
+                .or_insert_with(|| {
+                    let mut gl_texture_id = 0;
+                    unsafe {
+                        gl::GenTextures(1, &mut gl_texture_id);
+                        gl::BindTexture(gl::TEXTURE_2D, gl_texture_id);
+                        gl::TexParameteri(
+                            gl::TEXTURE_2D,
+                            gl::TEXTURE_WRAP_S,
+                            gl::CLAMP_TO_EDGE as i32,
+                        );
+                        gl::TexParameteri(
+                            gl::TEXTURE_2D,
+                            gl::TEXTURE_WRAP_T,
+                            gl::CLAMP_TO_EDGE as i32,
+                        );
+                        gl::TexParameteri(
+                            gl::TEXTURE_2D,
+                            gl::TEXTURE_MIN_FILTER,
+                            gl::LINEAR as i32,
+                        );
+                        gl::TexParameteri(
+                            gl::TEXTURE_2D,
+                            gl::TEXTURE_MAG_FILTER,
+                            gl::LINEAR as i32,
+                        );
+                    }
+
+                    gl_texture_id
+                });
+
+            let mut pixels: Vec<u8> =
+                Vec::with_capacity(delta.image.width() * delta.image.height() * 4);
+            match &delta.image {
+                egui::ImageData::Color(image) => {
+                    for pixel in &image.pixels {
+                        pixels.push(pixel.r());
+                        pixels.push(pixel.g());
+                        pixels.push(pixel.b());
+                        pixels.push(pixel.a());
+                    }
+                }
+                egui::ImageData::Alpha(image) => {
+                    for pixel in &image.pixels {
+                        let srgba = Color32::from_white_alpha(*pixel);
+                        pixels.push(srgba.r());
+                        pixels.push(srgba.g());
+                        pixels.push(srgba.b());
+                        pixels.push(srgba.a());
+                    }
+                }
+            };
+
+            unsafe {
+                gl::BindTexture(gl::TEXTURE_2D, gl_texture_id);
+
+                let level = 0;
+                let internal_format = gl::RGBA;
+                let border = 0;
+                let src_format = gl::RGBA;
+                let src_type = gl::UNSIGNED_BYTE;
+                match delta.pos {
+                    Some([x, y]) => {
+                        gl::TexSubImage2D(
+                            gl::TEXTURE_2D,
+                            level,
+                            x as i32,
+                            y as i32,
+                            delta.image.width() as i32,
+                            delta.image.height() as i32,
+                            src_format,
+                            src_type,
+                            pixels.as_ptr() as *const c_void,
+                        );
+                    }
+                    None => {
+                        gl::TexImage2D(
+                            gl::TEXTURE_2D,
+                            level,
+                            internal_format as i32,
+                            delta.image.width() as i32,
+                            delta.image.height() as i32,
+                            border,
+                            src_format,
+                            src_type,
+                            pixels.as_ptr() as *const c_void,
+                        );
+                    }
+                }
+            }
         }
 
-        let mut pixels: Vec<u8> = Vec::with_capacity(font_image.pixels.len() * 4);
-        for &alpha in &font_image.pixels {
-            let srgba = Color32::from_white_alpha(alpha);
-            pixels.push(srgba.r());
-            pixels.push(srgba.g());
-            pixels.push(srgba.b());
-            pixels.push(srgba.a());
-        }
-
-        unsafe {
-            gl::BindTexture(gl::TEXTURE_2D, self.egui_texture);
-
-            let level = 0;
-            let internal_format = gl::RGBA;
-            let border = 0;
-            let src_format = gl::RGBA;
-            let src_type = gl::UNSIGNED_BYTE;
-            gl::TexImage2D(
-                gl::TEXTURE_2D,
-                level,
-                internal_format as i32,
-                font_image.width as i32,
-                font_image.height as i32,
-                border,
-                src_format,
-                src_type,
-                pixels.as_ptr() as *const c_void,
-            );
-
-            self.egui_texture_version = Some(font_image.version);
+        for egui_texture_id in &texture_delta.free {
+            match &egui_texture_id {
+                egui::TextureId::Managed(id) => {
+                    unsafe { gl::DeleteTextures(1, &self.egui_textures[id]) }
+                    self.egui_textures.remove(id);
+                }
+                // This shouldn't be reachable
+                egui::TextureId::User(_) => eprintln!("Texture manager tried to free user texture"),
+            };
         }
     }
 
@@ -398,7 +475,7 @@ impl Painter {
 
     fn get_texture(&self, texture_id: egui::TextureId) -> Option<GLuint> {
         match texture_id {
-            egui::TextureId::Egui => Some(self.egui_texture),
+            egui::TextureId::Managed(id) => self.egui_textures.get(&id).copied(),
             egui::TextureId::User(id) => {
                 let id = id as usize;
                 if id >= self.user_textures.len() {
@@ -411,7 +488,9 @@ impl Painter {
 
     pub fn update_user_texture_data(&mut self, texture_id: egui::TextureId, pixels: &[Color32]) {
         match texture_id {
-            egui::TextureId::Egui => {}
+            egui::TextureId::Managed(_) => {
+                eprintln!("Managed textures should be updated through the texture manager")
+            }
             egui::TextureId::User(id) => {
                 let id = id as usize;
                 assert!(id < self.user_textures.len());
@@ -432,10 +511,10 @@ impl Painter {
         &mut self,
         clear_color: egui::Rgba,
         clipped_meshes: Vec<ClippedMesh>,
-        egui_font_image: &FontImage,
+        texture_delta: &TexturesDelta,
         pixels_per_point: f32,
     ) {
-        self.upload_egui_font_image(egui_font_image);
+        self.upload_texture_delta(texture_delta);
         self.upload_user_textures();
 
         unsafe {
@@ -671,8 +750,8 @@ impl Drop for Painter {
                 gl::DeleteVertexArrays(1, &self.index_buffer);
             }
 
-            if self.egui_texture != 0 {
-                gl::DeleteTextures(1, &self.egui_texture);
+            for (_, gl_texture_id) in self.egui_textures.drain() {
+                gl::DeleteTextures(1, &gl_texture_id);
             }
             for user_texture in &self.user_textures {
                 if let Some(texture_id) = user_texture.texture {

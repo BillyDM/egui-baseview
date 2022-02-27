@@ -14,7 +14,7 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-egui = "0.16"
+egui = "0.17"
 gl = { version = "0.14" }
 keyboard-types = { version = "0.6.1", default-features = false }
 # TODO: Move this back to RustAudio/baseview once the PR gets merged
