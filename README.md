@@ -73,6 +73,16 @@ impl State {
 Examples of how to use this library for audio plugins can be found here:
 * [`egui_baseview_test_vst2`]
 
+## Prerequisites
+
+### Linux
+
+Install dependencies, e.g.,
+
+```sh
+sudo apt-get install libx11-dev libxcursor-dev libxcb-dri2-0-dev libxcb-icccm4-dev libx11-xcb-dev mesa-common-dev libgl1-mesa-dev libglu1-mesa-dev
+```
+
 [`baseview`]: https://github.com/RustAudio/baseview
 [`egui`]: https://github.com/emilk/egui
 [`egui_baseview_test_vst2`]: https://github.com/DGriffin91/egui_baseview_test_vst2
