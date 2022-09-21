@@ -310,9 +310,6 @@ where
             } else if let Some(repaint_after) = now.checked_add(repaint_after) {
                 // Schedule to repaint after the requested time has elapsed.
                 self.repaint_after = Some(repaint_after);
-            } else {
-                // Schedule to repaint on the next frame.
-                self.repaint_after = Some(now);
             }
 
             if !platform_output.copied_text.is_empty() {
