@@ -15,13 +15,13 @@ readme = "README.md"
 
 [features]
 default = ["opengl"]
-opengl = ["raw-gl-context", "gl"]
+opengl = ["raw-gl-context", "egui_glow"]
 
 [dependencies]
-egui = "0.15"
+egui = "0.19"
+egui_glow = { version = "0.19", optional = true }
 raw-gl-context = { version = "0.1", optional = true }
-gl = { version = "0.14", optional = true }
 keyboard-types = { version = "0.5", default-features = false }
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "f6e99e9aa6f5aeb6b721cb05e4d882a51d995909" }
-raw-window-handle = "0.3"
-copypasta = "0.7.1"
+raw-window-handle = "0.4"
+copypasta = "0.8"
