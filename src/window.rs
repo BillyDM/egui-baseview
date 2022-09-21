@@ -75,7 +75,6 @@ where
     bg_color: Rgba,
     physical_width: u32,
     physical_height: u32,
-    pixels_per_point: f32,
     start_time: Instant,
     repaint_after: Option<Instant>,
     mouse_pos: Option<Pos2>,
@@ -108,7 +107,6 @@ where
 
         let egui_ctx = egui::Context::default();
 
-        let pixels_per_point = scale;
         let egui_input = egui::RawInput {
             screen_rect: Some(Rect::from_min_size(
                 Pos2::new(0f32, 0f32),
@@ -165,7 +163,6 @@ where
             bg_color,
             physical_width,
             physical_height,
-            pixels_per_point,
             start_time: Instant::now(),
             repaint_after: Some(Instant::now()),
             mouse_pos: None,
@@ -300,7 +297,7 @@ where
                     self.bg_color,
                     self.physical_width,
                     self.physical_height,
-                    self.pixels_per_point,
+                    self.scale_factor,
                     &mut self.egui_ctx,
                     &mut shapes,
                     &mut textures_delta,
