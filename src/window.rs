@@ -1,31 +1,23 @@
-use crate::renderer::{RenderSettings, Renderer};
-use crate::Settings;
 use baseview::{Event, EventStatus, Window, WindowHandle, WindowHandler, WindowScalePolicy};
 use copypasta::ClipboardProvider;
+use egui::{pos2, vec2, Pos2, Rect, Rgba};
 use raw_window_handle::HasRawWindowHandle;
-
 use std::time::Instant;
 
-use egui::{pos2, vec2, Color32, Pos2, Rect, Rgba};
+use crate::renderer::{RenderSettings, Renderer};
+use crate::Settings;
 
 pub struct Queue<'a> {
     bg_color: &'a mut Rgba,
-    renderer: &'a mut Renderer,
-    repaint_requested: &'a mut bool,
     close_requested: &'a mut bool,
 }
 
 impl<'a> Queue<'a> {
-    pub(crate) fn new(
-        bg_color: &'a mut Rgba,
-        renderer: &'a mut Renderer,
-        repaint_requested: &'a mut bool,
-        close_requested: &'a mut bool,
-    ) -> Self {
+    pub(crate) fn new(bg_color: &'a mut Rgba, close_requested: &'a mut bool) -> Self {
         Self {
             bg_color,
-            renderer,
-            repaint_requested,
+            //renderer,
+            //repaint_requested,
             close_requested,
         }
     }
@@ -33,27 +25,6 @@ impl<'a> Queue<'a> {
     /// Set the background color.
     pub fn bg_color(&mut self, bg_color: Rgba) {
         *self.bg_color = bg_color;
-    }
-
-    /// Create a new custom texture.
-    pub fn new_user_texture(
-        &mut self,
-        size: (usize, usize),
-        srgba_pixels: &[Color32],
-        filtering: bool,
-    ) -> egui::TextureId {
-        self.renderer
-            .new_user_texture(size, srgba_pixels, filtering)
-    }
-
-    /// Update a custom texture.
-    pub fn update_user_texture_data(&mut self, texture_id: egui::TextureId, pixels: &[Color32]) {
-        self.renderer.update_user_texture_data(texture_id, pixels)
-    }
-
-    /// Request to repaint the UI on the next frame.
-    pub fn request_repaint(&mut self) {
-        *self.repaint_requested = true;
     }
 
     /// Close the window.
@@ -88,23 +59,25 @@ impl OpenSettings {
 pub struct EguiWindow<State, U>
 where
     State: 'static + Send,
-    U: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+    U: FnMut(&egui::Context, &mut Queue, &mut State),
     U: 'static + Send,
 {
     user_state: Option<State>,
     user_update: U,
 
-    egui_ctx: egui::CtxRef,
-    raw_input: egui::RawInput,
+    egui_ctx: egui::Context,
+    egui_input: egui::RawInput,
     clipboard_ctx: Option<copypasta::ClipboardContext>,
 
     renderer: Renderer,
     scale_factor: f32,
     scale_policy: WindowScalePolicy,
     bg_color: Rgba,
-    //modifiers: egui::Modifiers,
+    physical_width: u32,
+    physical_height: u32,
+    pixels_per_point: f32,
     start_time: Instant,
-    redraw: bool,
+    repaint_after: Option<Instant>,
     mouse_pos: Option<Pos2>,
     close_requested: bool,
 }
@@ -112,7 +85,7 @@ where
 impl<State, U> EguiWindow<State, U>
 where
     State: 'static + Send,
-    U: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+    U: FnMut(&egui::Context, &mut Queue, &mut State),
     U: 'static + Send,
 {
     fn new<B>(
@@ -124,7 +97,7 @@ where
         mut state: State,
     ) -> EguiWindow<State, U>
     where
-        B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+        B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
         // Assume scale for now until there is an event with a new one.
@@ -133,9 +106,10 @@ where
             WindowScalePolicy::SystemScaleFactor => 1.0,
         } as f32;
 
-        let egui_ctx = egui::CtxRef::default();
+        let egui_ctx = egui::Context::default();
 
-        let raw_input = egui::RawInput {
+        let pixels_per_point = scale;
+        let egui_input = egui::RawInput {
             screen_rect: Some(Rect::from_min_size(
                 Pos2::new(0f32, 0f32),
                 vec2(
@@ -154,23 +128,17 @@ where
             ..Default::default()
         };
 
-        let mut renderer = Renderer::new(
-            window,
-            render_settings.take().unwrap(),
-            (
-                (open_settings.logical_width * scale as f64).round() as u32,
-                (open_settings.logical_height * scale as f64).round() as u32,
-            ),
-        );
+        let physical_width = (open_settings.logical_width * scale as f64).round() as u32;
+        let physical_height = (open_settings.logical_height * scale as f64).round() as u32;
+
+        let renderer = Renderer::new(window, render_settings.take().unwrap());
 
         let mut bg_color = Rgba::BLACK;
-
-        let mut repaint_requested = false;
         let mut close_requested = false;
         let mut queue = Queue::new(
             &mut bg_color,
-            &mut renderer,
-            &mut repaint_requested,
+            //&mut renderer,
+            //&mut repaint_requested,
             &mut close_requested,
         );
         (build)(&egui_ctx, &mut queue, &mut state);
@@ -188,15 +156,18 @@ where
             user_update: update,
 
             egui_ctx,
-            raw_input,
+            egui_input,
             clipboard_ctx,
 
             renderer,
             scale_factor: scale,
             scale_policy: open_settings.scale_policy,
             bg_color,
+            physical_width,
+            physical_height,
+            pixels_per_point,
             start_time: Instant::now(),
-            redraw: true,
+            repaint_after: Some(Instant::now()),
             mouse_pos: None,
             close_requested,
         }
@@ -220,7 +191,7 @@ where
     ) -> WindowHandle
     where
         P: HasRawWindowHandle,
-        B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+        B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
         let open_settings = OpenSettings::new(&settings);
@@ -250,7 +221,7 @@ where
         update: U,
     ) -> WindowHandle
     where
-        B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+        B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
         let open_settings = OpenSettings::new(&settings);
@@ -274,7 +245,7 @@ where
     /// application and build the UI.
     pub fn open_blocking<B>(settings: Settings, state: State, build: B, update: U)
     where
-        B: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+        B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
         let open_settings = OpenSettings::new(&settings);
@@ -292,53 +263,71 @@ where
 impl<State, U> WindowHandler for EguiWindow<State, U>
 where
     State: 'static + Send,
-    U: FnMut(&egui::CtxRef, &mut Queue, &mut State),
+    U: FnMut(&egui::Context, &mut Queue, &mut State),
     U: 'static + Send,
 {
     fn on_frame(&mut self, window: &mut Window) {
         if let Some(state) = &mut self.user_state {
-            self.raw_input.time = Some(self.start_time.elapsed().as_nanos() as f64 * 1e-9);
-            self.egui_ctx.begin_frame(self.raw_input.take());
+            self.egui_input.time = Some(self.start_time.elapsed().as_nanos() as f64 * 1e-9);
+            self.egui_ctx.begin_frame(self.egui_input.take());
 
-            let mut repaint_requested = false;
+            //let mut repaint_requested = false;
             let mut queue = Queue::new(
                 &mut self.bg_color,
-                &mut self.renderer,
-                &mut repaint_requested,
+                //&mut self.renderer,
+                //&mut repaint_requested,
                 &mut self.close_requested,
             );
 
             (self.user_update)(&self.egui_ctx, &mut queue, state);
 
-            let (output, paint_cmds) = self.egui_ctx.end_frame();
+            let egui::FullOutput {
+                platform_output,
+                repaint_after,
+                mut textures_delta,
+                mut shapes,
+            } = self.egui_ctx.end_frame();
 
-            if output.needs_repaint || self.redraw || repaint_requested {
-                let paint_jobs = self.egui_ctx.tessellate(paint_cmds);
+            let now = Instant::now();
+            let do_repaint_now = if let Some(t) = self.repaint_after {
+                now >= t || repaint_after.is_zero()
+            } else {
+                repaint_after.is_zero()
+            };
 
+            if do_repaint_now {
                 self.renderer.render(
                     self.bg_color,
-                    paint_jobs,
-                    &self.egui_ctx.texture(),
-                    self.scale_factor,
+                    self.physical_width,
+                    self.physical_height,
+                    self.pixels_per_point,
+                    &mut self.egui_ctx,
+                    &mut shapes,
+                    &mut textures_delta,
                 );
 
-                self.redraw = false;
+                self.repaint_after = None;
+            } else if let Some(repaint_after) = now.checked_add(repaint_after) {
+                // Schedule to repaint after the requested time has elapsed.
+                self.repaint_after = Some(repaint_after);
+            } else {
+                // Schedule to repaint on the next frame.
+                self.repaint_after = Some(now);
             }
 
-            if !output.copied_text.is_empty() {
+            if !platform_output.copied_text.is_empty() {
                 if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
-                    if let Err(err) = clipboard_ctx.set_contents(output.copied_text) {
+                    if let Err(err) = clipboard_ctx.set_contents(platform_output.copied_text) {
                         eprintln!("Copy/Cut error: {}", err);
                     }
                 }
             }
 
+            // TODO: Handle setting the cursor icon.
+
             if self.close_requested {
-                self.close_requested = false;
                 window.close();
             }
-
-            // TODO: Handle the rest of the outputs.
         }
     }
 
@@ -348,16 +337,16 @@ where
                 baseview::MouseEvent::CursorMoved { position } => {
                     let pos = pos2(position.x as f32, position.y as f32);
                     self.mouse_pos = Some(pos);
-                    self.raw_input.events.push(egui::Event::PointerMoved(pos));
+                    self.egui_input.events.push(egui::Event::PointerMoved(pos));
                 }
                 baseview::MouseEvent::ButtonPressed(button) => {
                     if let Some(pos) = self.mouse_pos {
                         if let Some(button) = translate_mouse_button(*button) {
-                            self.raw_input.events.push(egui::Event::PointerButton {
+                            self.egui_input.events.push(egui::Event::PointerButton {
                                 pos,
                                 button,
                                 pressed: true,
-                                modifiers: self.raw_input.modifiers,
+                                modifiers: self.egui_input.modifiers,
                             });
                         }
                     }
@@ -365,11 +354,11 @@ where
                 baseview::MouseEvent::ButtonReleased(button) => {
                     if let Some(pos) = self.mouse_pos {
                         if let Some(button) = translate_mouse_button(*button) {
-                            self.raw_input.events.push(egui::Event::PointerButton {
+                            self.egui_input.events.push(egui::Event::PointerButton {
                                 pos,
                                 button,
                                 pressed: false,
-                                modifiers: self.raw_input.modifiers,
+                                modifiers: self.egui_input.modifiers,
                             });
                         }
                     }
@@ -381,7 +370,7 @@ where
                             egui::vec2(*x, *y) * points_per_scroll_line
                         }
                         baseview::ScrollDelta::Pixels { x, y } => {
-                            if let Some(pixels_per_point) = self.raw_input.pixels_per_point {
+                            if let Some(pixels_per_point) = self.egui_input.pixels_per_point {
                                 egui::vec2(*x, *y) / pixels_per_point
                             } else {
                                 egui::vec2(*x, *y)
@@ -394,16 +383,23 @@ where
                         delta.x *= -1.0;
                     }
 
-                    if self.raw_input.modifiers.ctrl || self.raw_input.modifiers.command {
+                    if self.egui_input.modifiers.ctrl || self.egui_input.modifiers.command {
                         // Treat as zoom instead:
-                        self.raw_input.zoom_delta *= (delta.y / 200.0).exp();
+                        let factor = (delta.y / 200.0).exp();
+                        self.egui_input.events.push(egui::Event::Zoom(factor));
+                    } else if self.egui_input.modifiers.shift {
+                        // Treat as horizontal scrolling.
+                        // Note: one Mac we already get horizontal scroll events when shift is down.
+                        self.egui_input
+                            .events
+                            .push(egui::Event::Scroll(egui::vec2(delta.x + delta.y, 0.0)));
                     } else {
-                        self.raw_input.scroll_delta += delta;
+                        self.egui_input.events.push(egui::Event::Scroll(delta));
                     }
                 }
                 baseview::MouseEvent::CursorLeft => {
                     self.mouse_pos = None;
-                    self.raw_input.events.push(egui::Event::PointerGone);
+                    self.egui_input.events.push(egui::Event::PointerGone);
                 }
                 _ => {}
             },
@@ -413,21 +409,21 @@ where
                 let pressed = event.state == keyboard_types::KeyState::Down;
 
                 match event.code {
-                    Code::ShiftLeft | Code::ShiftRight => self.raw_input.modifiers.shift = pressed,
+                    Code::ShiftLeft | Code::ShiftRight => self.egui_input.modifiers.shift = pressed,
                     Code::ControlLeft | Code::ControlRight => {
-                        self.raw_input.modifiers.ctrl = pressed;
+                        self.egui_input.modifiers.ctrl = pressed;
 
                         #[cfg(not(target_os = "macos"))]
                         {
-                            self.raw_input.modifiers.command = pressed;
+                            self.egui_input.modifiers.command = pressed;
                         }
                     }
-                    Code::AltLeft | Code::AltRight => self.raw_input.modifiers.alt = pressed,
+                    Code::AltLeft | Code::AltRight => self.egui_input.modifiers.alt = pressed,
                     Code::MetaLeft | Code::MetaRight => {
                         #[cfg(target_os = "macos")]
                         {
-                            self.raw_input.modifiers.mac_cmd = pressed;
-                            self.raw_input.modifiers.command = pressed;
+                            self.egui_input.modifiers.mac_cmd = pressed;
+                            self.egui_input.modifiers.command = pressed;
                         }
                         () // prevent `rustfmt` from breaking this
                     }
@@ -435,25 +431,25 @@ where
                 }
 
                 if let Some(key) = translate_virtual_key_code(event.code) {
-                    self.raw_input.events.push(egui::Event::Key {
+                    self.egui_input.events.push(egui::Event::Key {
                         key,
                         pressed,
-                        modifiers: self.raw_input.modifiers,
+                        modifiers: self.egui_input.modifiers,
                     });
                 }
 
                 if pressed {
                     // VirtualKeyCode::Paste etc in winit are broken/untrustworthy,
                     // so we detect these things manually:
-                    if is_cut_command(self.raw_input.modifiers, event.code) {
-                        self.raw_input.events.push(egui::Event::Cut);
-                    } else if is_copy_command(self.raw_input.modifiers, event.code) {
-                        self.raw_input.events.push(egui::Event::Copy);
-                    } else if is_paste_command(self.raw_input.modifiers, event.code) {
+                    if is_cut_command(self.egui_input.modifiers, event.code) {
+                        self.egui_input.events.push(egui::Event::Cut);
+                    } else if is_copy_command(self.egui_input.modifiers, event.code) {
+                        self.egui_input.events.push(egui::Event::Copy);
+                    } else if is_paste_command(self.egui_input.modifiers, event.code) {
                         if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
                             match clipboard_ctx.get_contents() {
                                 Ok(contents) => {
-                                    self.raw_input.events.push(egui::Event::Text(contents))
+                                    self.egui_input.events.push(egui::Event::Text(contents))
                                 }
                                 Err(err) => {
                                     eprintln!("Paste error: {}", err);
@@ -461,8 +457,8 @@ where
                             }
                         }
                     } else if let keyboard_types::Key::Character(written) = &event.key {
-                        if !self.raw_input.modifiers.ctrl && !self.raw_input.modifiers.command {
-                            self.raw_input
+                        if !self.egui_input.modifiers.ctrl && !self.egui_input.modifiers.command {
+                            self.egui_input
                                 .events
                                 .push(egui::Event::Text(written.clone()));
                             self.egui_ctx.wants_keyboard_input();
@@ -482,19 +478,18 @@ where
                         (window_info.physical_size().height as f32 / self.scale_factor),
                     );
 
-                    self.raw_input.pixels_per_point = Some(self.scale_factor);
+                    self.physical_width = window_info.physical_size().width;
+                    self.physical_height = window_info.physical_size().height;
 
-                    self.raw_input.screen_rect = Some(Rect::from_min_size(
+                    self.egui_input.pixels_per_point = Some(self.scale_factor);
+
+                    self.egui_input.screen_rect = Some(Rect::from_min_size(
                         Pos2::new(0f32, 0f32),
                         vec2(logical_size.0, logical_size.1),
                     ));
 
-                    self.renderer.update_window_size(
-                        window_info.physical_size().width,
-                        window_info.physical_size().height,
-                    );
-
-                    self.redraw = true;
+                    // Schedule to repaint on the next frame.
+                    self.repaint_after = Some(Instant::now());
                 }
                 baseview::WindowEvent::WillClose => {}
                 _ => {}
