@@ -21,6 +21,6 @@ opengl = ["egui_glow", "baseview/opengl"]
 egui = "0.19"
 egui_glow = { version = "0.19", optional = true }
 keyboard-types = { version = "0.6.1", default-features = false }
-baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "b3712638bacb3fdf2883cb5aa3f6caed0e91ac8c" }
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "eae4033e7d2cc9c31ccaa2794d5d08eedf2f510c" }
 raw-window-handle = "0.4.2"
 copypasta = "0.8"

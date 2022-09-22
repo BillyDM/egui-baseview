@@ -3,6 +3,7 @@ use baseview::{
 };
 use copypasta::ClipboardProvider;
 use egui::{pos2, vec2, Pos2, Rect, Rgba};
+use keyboard_types::Modifiers;
 use raw_window_handle::HasRawWindowHandle;
 use std::time::Instant;
 
@@ -264,6 +265,13 @@ where
             },
         )
     }
+
+    /// Update the pressed key modifiers when a mouse event has sent a new set of modifiers.
+    fn update_modifiers(&mut self, modifiers: &Modifiers) {
+        self.egui_input.modifiers.alt = !(*modifiers & Modifiers::ALT).is_empty();
+        self.egui_input.modifiers.shift = !(*modifiers & Modifiers::SHIFT).is_empty();
+        self.egui_input.modifiers.command = !(*modifiers & Modifiers::CONTROL).is_empty();
+    }
 }
 
 impl<State, U> WindowHandler for EguiWindow<State, U>
@@ -338,12 +346,19 @@ where
     fn on_event(&mut self, _window: &mut Window, event: Event) -> EventStatus {
         match &event {
             baseview::Event::Mouse(event) => match event {
-                baseview::MouseEvent::CursorMoved { position } => {
+                baseview::MouseEvent::CursorMoved {
+                    position,
+                    modifiers,
+                } => {
+                    self.update_modifiers(modifiers);
+
                     let pos = pos2(position.x as f32, position.y as f32);
                     self.mouse_pos = Some(pos);
                     self.egui_input.events.push(egui::Event::PointerMoved(pos));
                 }
-                baseview::MouseEvent::ButtonPressed(button) => {
+                baseview::MouseEvent::ButtonPressed { button, modifiers } => {
+                    self.update_modifiers(modifiers);
+
                     if let Some(pos) = self.mouse_pos {
                         if let Some(button) = translate_mouse_button(*button) {
                             self.egui_input.events.push(egui::Event::PointerButton {
@@ -355,7 +370,9 @@ where
                         }
                     }
                 }
-                baseview::MouseEvent::ButtonReleased(button) => {
+                baseview::MouseEvent::ButtonReleased { button, modifiers } => {
+                    self.update_modifiers(modifiers);
+
                     if let Some(pos) = self.mouse_pos {
                         if let Some(button) = translate_mouse_button(*button) {
                             self.egui_input.events.push(egui::Event::PointerButton {
@@ -367,7 +384,12 @@ where
                         }
                     }
                 }
-                baseview::MouseEvent::WheelScrolled(scroll_delta) => {
+                baseview::MouseEvent::WheelScrolled {
+                    delta: scroll_delta,
+                    modifiers,
+                } => {
+                    self.update_modifiers(modifiers);
+
                     let mut delta = match scroll_delta {
                         baseview::ScrollDelta::Lines { x, y } => {
                             let points_per_scroll_line = 50.0; // Scroll speed decided by consensus: https://github.com/emilk/egui/issues/461
