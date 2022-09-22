@@ -1,20 +1,20 @@
 use baseview::Window;
 use egui_glow::Painter;
-use raw_gl_context::GlContext;
 use std::sync::Arc;
 
-pub use raw_gl_context::GlConfig as RenderSettings;
-
 pub struct Renderer {
-    context: GlContext,
     glow_context: Arc<egui_glow::glow::Context>,
     painter: Painter,
 }
 
 impl Renderer {
-    pub fn new(window: &Window, render_settings: RenderSettings) -> Self {
-        let context = GlContext::create(window, render_settings).unwrap();
-        context.make_current();
+    pub fn new(window: &Window) -> Self {
+        let context = window
+            .gl_context()
+            .expect("failed to get baseview gl context");
+        unsafe {
+            context.make_current();
+        }
 
         let glow_context = Arc::new(unsafe {
             egui_glow::glow::Context::from_loader_function(|s| context.get_proc_address(s))
@@ -26,10 +26,11 @@ impl Renderer {
             })
             .unwrap();
 
-        context.make_not_current();
+        unsafe {
+            context.make_not_current();
+        }
 
         Self {
-            context,
             glow_context,
             painter,
         }
@@ -37,6 +38,7 @@ impl Renderer {
 
     pub fn render(
         &mut self,
+        window: &Window,
         bg_color: egui::Rgba,
         canvas_width: u32,
         canvas_height: u32,
@@ -48,7 +50,12 @@ impl Renderer {
         let shapes = std::mem::take(shapes);
         let mut textures_delta = std::mem::take(textures_delta);
 
-        self.context.make_current();
+        let context = window
+            .gl_context()
+            .expect("failed to get baseview gl context");
+        unsafe {
+            context.make_current();
+        }
 
         unsafe {
             use egui_glow::glow::HasContext as _;
@@ -71,8 +78,10 @@ impl Renderer {
             self.painter.free_texture(id);
         }
 
-        self.context.swap_buffers();
-        self.context.make_not_current();
+        unsafe {
+            context.swap_buffers();
+            context.make_not_current();
+        }
     }
 }
 

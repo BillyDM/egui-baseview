@@ -1,11 +1,12 @@
-use baseview::{Event, EventStatus, Window, WindowHandle, WindowHandler, WindowScalePolicy};
+use baseview::{
+    Event, EventStatus, Window, WindowHandle, WindowHandler, WindowOpenOptions, WindowScalePolicy,
+};
 use copypasta::ClipboardProvider;
 use egui::{pos2, vec2, Pos2, Rect, Rgba};
 use raw_window_handle::HasRawWindowHandle;
 use std::time::Instant;
 
-use crate::renderer::{RenderSettings, Renderer};
-use crate::Settings;
+use crate::renderer::Renderer;
 
 pub struct Queue<'a> {
     bg_color: &'a mut Rgba,
@@ -40,17 +41,17 @@ struct OpenSettings {
 }
 
 impl OpenSettings {
-    fn new(settings: &Settings) -> Self {
+    fn new(settings: &WindowOpenOptions) -> Self {
         // WindowScalePolicy does not implement copy/clone.
-        let scale_policy = match &settings.window.scale {
+        let scale_policy = match &settings.scale {
             WindowScalePolicy::SystemScaleFactor => WindowScalePolicy::SystemScaleFactor,
             WindowScalePolicy::ScaleFactor(scale) => WindowScalePolicy::ScaleFactor(*scale),
         };
 
         Self {
             scale_policy,
-            logical_width: settings.window.size.width as f64,
-            logical_height: settings.window.size.height as f64,
+            logical_width: settings.size.width as f64,
+            logical_height: settings.size.height as f64,
         }
     }
 }
@@ -90,7 +91,6 @@ where
     fn new<B>(
         window: &mut baseview::Window<'_>,
         open_settings: OpenSettings,
-        mut render_settings: Option<RenderSettings>,
         mut build: B,
         update: U,
         mut state: State,
@@ -129,7 +129,7 @@ where
         let physical_width = (open_settings.logical_width * scale as f64).round() as u32;
         let physical_height = (open_settings.logical_height * scale as f64).round() as u32;
 
-        let renderer = Renderer::new(window, render_settings.take().unwrap());
+        let renderer = Renderer::new(window);
 
         let mut bg_color = Rgba::BLACK;
         let mut close_requested = false;
@@ -181,7 +181,7 @@ where
     /// application and build the UI.
     pub fn open_parented<P, B>(
         parent: &P,
-        settings: Settings,
+        mut settings: WindowOpenOptions,
         state: State,
         build: B,
         update: U,
@@ -191,14 +191,17 @@ where
         B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
+        if settings.gl_config.is_none() {
+            settings.gl_config = Some(Default::default());
+        }
+
         let open_settings = OpenSettings::new(&settings);
-        let render_settings = Some(settings.render_settings);
 
         Window::open_parented(
             parent,
-            settings.window,
+            settings,
             move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
-                EguiWindow::new(window, open_settings, render_settings, build, update, state)
+                EguiWindow::new(window, open_settings, build, update, state)
             },
         )
     }
@@ -212,7 +215,7 @@ where
     /// * `update` - Called before each frame. Here you should update the state of your
     /// application and build the UI.
     pub fn open_as_if_parented<B>(
-        settings: Settings,
+        mut settings: WindowOpenOptions,
         state: State,
         build: B,
         update: U,
@@ -221,13 +224,16 @@ where
         B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
+        if settings.gl_config.is_none() {
+            settings.gl_config = Some(Default::default());
+        }
+
         let open_settings = OpenSettings::new(&settings);
-        let render_settings = Some(settings.render_settings);
 
         Window::open_as_if_parented(
-            settings.window,
+            settings,
             move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
-                EguiWindow::new(window, open_settings, render_settings, build, update, state)
+                EguiWindow::new(window, open_settings, build, update, state)
             },
         )
     }
@@ -240,18 +246,21 @@ where
     /// call `ctx.set_fonts()`. Optional.
     /// * `update` - Called before each frame. Here you should update the state of your
     /// application and build the UI.
-    pub fn open_blocking<B>(settings: Settings, state: State, build: B, update: U)
+    pub fn open_blocking<B>(mut settings: WindowOpenOptions, state: State, build: B, update: U)
     where
         B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
+        if settings.gl_config.is_none() {
+            settings.gl_config = Some(Default::default());
+        }
+
         let open_settings = OpenSettings::new(&settings);
-        let render_settings = Some(settings.render_settings);
 
         Window::open_blocking(
-            settings.window,
+            settings,
             move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
-                EguiWindow::new(window, open_settings, render_settings, build, update, state)
+                EguiWindow::new(window, open_settings, build, update, state)
             },
         )
     }
@@ -294,6 +303,7 @@ where
 
             if do_repaint_now {
                 self.renderer.render(
+                    window,
                     self.bg_color,
                     self.physical_width,
                     self.physical_height,

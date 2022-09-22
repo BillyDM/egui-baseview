@@ -1,8 +1,8 @@
 [package]
 name = "egui-baseview"
-version = "0.0.0"
+version = "0.1.0"
 authors = ["Billy Messenger <BillyDM@protonmail.com>"]
-edition = "2018"
+edition = "2021"
 description = "A baseview backend for egui"
 license = "MIT"
 repository = "https://github.com/BillyDM/egui-baseview"
@@ -15,12 +15,11 @@ readme = "README.md"
 
 [features]
 default = ["opengl"]
-opengl = ["raw-gl-context", "egui_glow"]
+opengl = ["egui_glow", "baseview/opengl"]
 
 [dependencies]
 egui = "0.19"
 egui_glow = { version = "0.19", optional = true }
-raw-gl-context = { version = "0.1", optional = true }
 keyboard-types = { version = "0.6.1", default-features = false }
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "b3712638bacb3fdf2883cb5aa3f6caed0e91ac8c" }
 raw-window-handle = "0.4.2"

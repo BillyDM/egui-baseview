@@ -1,15 +1,13 @@
 use baseview::{Size, WindowOpenOptions, WindowScalePolicy};
 use egui::Context;
-use egui_baseview::{EguiWindow, Queue, RenderSettings, Settings};
+use egui_baseview::{EguiWindow, Queue};
 
 fn main() {
-    let settings = Settings {
-        window: WindowOpenOptions {
-            title: String::from("egui-baseview hello world"),
-            size: Size::new(300.0, 110.0),
-            scale: WindowScalePolicy::SystemScaleFactor,
-        },
-        render_settings: RenderSettings::default(),
+    let settings = WindowOpenOptions {
+        title: String::from("egui-baseview hello world"),
+        size: Size::new(300.0, 110.0),
+        scale: WindowScalePolicy::SystemScaleFactor,
+        gl_config: Some(Default::default()),
     };
 
     let state = ();
