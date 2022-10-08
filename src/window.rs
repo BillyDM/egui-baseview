@@ -487,7 +487,6 @@ where
                             self.egui_input
                                 .events
                                 .push(egui::Event::Text(written.clone()));
-                            self.egui_ctx.wants_keyboard_input();
                         }
                     }
                 }
