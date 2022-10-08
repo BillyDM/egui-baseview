@@ -456,7 +456,7 @@ where
                     _ => (),
                 }
 
-                if let Some(key) = translate_virtual_key_code(event.code) {
+                if let Some(key) = translate_virtual_key(&event.key) {
                     self.egui_input.events.push(egui::Event::Key {
                         key,
                         pressed,
@@ -535,66 +535,72 @@ pub fn translate_mouse_button(button: baseview::MouseButton) -> Option<egui::Poi
     }
 }
 
-pub fn translate_virtual_key_code(key: keyboard_types::Code) -> Option<egui::Key> {
+pub fn translate_virtual_key(key: &keyboard_types::Key) -> Option<egui::Key> {
+    use keyboard_types::Key as K;
     use egui::Key;
-    use keyboard_types::Code;
 
     Some(match key {
-        Code::ArrowDown => Key::ArrowDown,
-        Code::ArrowLeft => Key::ArrowLeft,
-        Code::ArrowRight => Key::ArrowRight,
-        Code::ArrowUp => Key::ArrowUp,
+        K::ArrowDown => Key::ArrowDown,
+        K::ArrowLeft => Key::ArrowLeft,
+        K::ArrowRight => Key::ArrowRight,
+        K::ArrowUp => Key::ArrowUp,
 
-        Code::Escape => Key::Escape,
-        Code::Tab => Key::Tab,
-        Code::Backspace => Key::Backspace,
-        Code::Enter => Key::Enter,
-        Code::Space => Key::Space,
+        K::Escape => Key::Escape,
+        K::Tab => Key::Tab,
+        K::Backspace => Key::Backspace,
+        K::Enter => Key::Enter,
 
-        Code::Insert => Key::Insert,
-        Code::Delete => Key::Delete,
-        Code::Home => Key::Home,
-        Code::End => Key::End,
-        Code::PageUp => Key::PageUp,
-        Code::PageDown => Key::PageDown,
+        K::Insert => Key::Insert,
+        K::Delete => Key::Delete,
+        K::Home => Key::Home,
+        K::End => Key::End,
+        K::PageUp => Key::PageUp,
+        K::PageDown => Key::PageDown,
 
-        Code::Digit0 | Code::Numpad0 => Key::Num0,
-        Code::Digit1 | Code::Numpad1 => Key::Num1,
-        Code::Digit2 | Code::Numpad2 => Key::Num2,
-        Code::Digit3 | Code::Numpad3 => Key::Num3,
-        Code::Digit4 | Code::Numpad4 => Key::Num4,
-        Code::Digit5 | Code::Numpad5 => Key::Num5,
-        Code::Digit6 | Code::Numpad6 => Key::Num6,
-        Code::Digit7 | Code::Numpad7 => Key::Num7,
-        Code::Digit8 | Code::Numpad8 => Key::Num8,
-        Code::Digit9 | Code::Numpad9 => Key::Num9,
-
-        Code::KeyA => Key::A,
-        Code::KeyB => Key::B,
-        Code::KeyC => Key::C,
-        Code::KeyD => Key::D,
-        Code::KeyE => Key::E,
-        Code::KeyF => Key::F,
-        Code::KeyG => Key::G,
-        Code::KeyH => Key::H,
-        Code::KeyI => Key::I,
-        Code::KeyJ => Key::J,
-        Code::KeyK => Key::K,
-        Code::KeyL => Key::L,
-        Code::KeyM => Key::M,
-        Code::KeyN => Key::N,
-        Code::KeyO => Key::O,
-        Code::KeyP => Key::P,
-        Code::KeyQ => Key::Q,
-        Code::KeyR => Key::R,
-        Code::KeyS => Key::S,
-        Code::KeyT => Key::T,
-        Code::KeyU => Key::U,
-        Code::KeyV => Key::V,
-        Code::KeyW => Key::W,
-        Code::KeyX => Key::X,
-        Code::KeyY => Key::Y,
-        Code::KeyZ => Key::Z,
+        K::Character(s) => {
+            match s.chars().next()? {
+                ' ' => Key::Space,
+                '0' => Key::Num0,
+                '1' => Key::Num1,
+                '2' => Key::Num2,
+                '3' => Key::Num3,
+                '4' => Key::Num4,
+                '5' => Key::Num5,
+                '6' => Key::Num6,
+                '7' => Key::Num7,
+                '8' => Key::Num8,
+                '9' => Key::Num9,
+                'a' => Key::A,
+                'b' => Key::B,
+                'c' => Key::C,
+                'd' => Key::D,
+                'e' => Key::E,
+                'f' => Key::F,
+                'g' => Key::G,
+                'h' => Key::H,
+                'i' => Key::I,
+                'j' => Key::J,
+                'k' => Key::K,
+                'l' => Key::L,
+                'm' => Key::M,
+                'n' => Key::N,
+                'o' => Key::O,
+                'p' => Key::P,
+                'q' => Key::Q,
+                'r' => Key::R,
+                's' => Key::S,
+                't' => Key::T,
+                'u' => Key::U,
+                'v' => Key::V,
+                'w' => Key::W,
+                'x' => Key::X,
+                'y' => Key::Y,
+                'z' => Key::Z,
+                _ => {
+                    return None;
+                }
+            }
+        }
         _ => {
             return None;
         }
