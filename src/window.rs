@@ -327,6 +327,9 @@ where
                 self.repaint_after = Some(repaint_after);
             }
 
+            if let Some(open_url) = platform_output.open_url {
+                open_url_in_browser(&open_url.url);
+            }
             if !platform_output.copied_text.is_empty() {
                 if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
                     if let Err(err) = clipboard_ctx.set_contents(platform_output.copied_text) {
@@ -625,4 +628,9 @@ fn is_paste_command(modifiers: egui::Modifiers, keycode: keyboard_types::Code) -
         || (cfg!(target_os = "windows")
             && modifiers.shift
             && keycode == keyboard_types::Code::Insert)
+}
+
+fn open_url_in_browser(_url: &str) {
+    #[cfg(feature = "webbrowser")]
+    let _ = webbrowser::open(_url);
 }
