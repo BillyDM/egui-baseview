@@ -20,7 +20,7 @@ impl Renderer {
             egui_glow::glow::Context::from_loader_function(|s| context.get_proc_address(s))
         });
 
-        let painter = egui_glow::Painter::new(Arc::clone(&glow_context), None, "")
+        let painter = egui_glow::Painter::new(Arc::clone(&glow_context), "", None)
             .map_err(|error| {
                 eprintln!("error occurred in initializing painter:\n{}", error);
             })

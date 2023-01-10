@@ -18,8 +18,8 @@ default = ["opengl"]
 opengl = ["egui_glow", "baseview/opengl"]
 
 [dependencies]
-egui = "0.19"
-egui_glow = { version = "0.19", optional = true }
+egui = "0.20"
+egui_glow = { version = "0.20", optional = true }
 keyboard-types = { version = "0.6.1", default-features = false }
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "eae4033e7d2cc9c31ccaa2794d5d08eedf2f510c" }
 raw-window-handle = "0.4.2"
