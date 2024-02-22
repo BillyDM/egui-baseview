@@ -158,7 +158,7 @@ where
         let clipboard_ctx = match copypasta::ClipboardContext::new() {
             Ok(clipboard_ctx) => Some(clipboard_ctx),
             Err(e) => {
-                eprintln!("Failed to initialize clipboard: {}", e);
+                log::error!("Failed to initialize clipboard: {}", e);
                 None
             }
         };
@@ -284,6 +284,10 @@ where
 
         (self.user_update)(&self.egui_ctx, &mut queue, state);
 
+        if self.close_requested {
+            window.close();
+        }
+
         // Prevent data from being allocated every frame by storing this
         // in a member field.
         self.full_output = self.egui_ctx.end_frame();
@@ -297,7 +301,7 @@ where
         for command in viewport_output.commands.iter() {
             match command {
                 ViewportCommand::Close => {
-                    self.close_requested = true;
+                    window.close();
                 }
                 ViewportCommand::InnerSize(size) => window.resize(baseview::Size {
                     width: size.x.max(1.0) as f64,
@@ -337,20 +341,17 @@ where
                 if let Err(err) =
                     clipboard_ctx.set_contents(self.full_output.platform_output.copied_text.clone())
                 {
-                    eprintln!("Copy/Cut error: {}", err);
+                    log::error!("Copy/Cut error: {}", err);
                 }
             }
             self.full_output.platform_output.copied_text.clear();
         }
 
-        let cursor_icon = translate_cursor_icon(self.full_output.platform_output.cursor_icon);
+        let cursor_icon =
+            crate::translate::translate_cursor_icon(self.full_output.platform_output.cursor_icon);
         if self.current_cursor_icon != cursor_icon {
             self.current_cursor_icon = cursor_icon;
             window.set_mouse_cursor(cursor_icon);
-        }
-
-        if self.close_requested {
-            window.close();
         }
     }
 
@@ -371,7 +372,7 @@ where
                     self.update_modifiers(modifiers);
 
                     if let Some(pos) = self.pointer_pos_in_points {
-                        if let Some(button) = translate_mouse_button(*button) {
+                        if let Some(button) = crate::translate::translate_mouse_button(*button) {
                             self.egui_input.events.push(egui::Event::PointerButton {
                                 pos,
                                 button,
@@ -385,7 +386,7 @@ where
                     self.update_modifiers(modifiers);
 
                     if let Some(pos) = self.pointer_pos_in_points {
-                        if let Some(button) = translate_mouse_button(*button) {
+                        if let Some(button) = crate::translate::translate_mouse_button(*button) {
                             self.egui_input.events.push(egui::Event::PointerButton {
                                 pos,
                                 button,
@@ -462,7 +463,7 @@ where
                     _ => (),
                 }
 
-                if let Some(key) = translate_virtual_key(&event.key) {
+                if let Some(key) = crate::translate::translate_virtual_key(&event.key) {
                     self.egui_input.events.push(egui::Event::Key {
                         key,
                         physical_key: None,
@@ -486,7 +487,7 @@ where
                                     self.egui_input.events.push(egui::Event::Text(contents))
                                 }
                                 Err(err) => {
-                                    eprintln!("Paste error: {}", err);
+                                    log::error!("Paste error: {}", err);
                                 }
                             }
                         }
@@ -558,125 +559,6 @@ where
         }
 
         EventStatus::Captured
-    }
-}
-
-pub fn translate_mouse_button(button: baseview::MouseButton) -> Option<egui::PointerButton> {
-    match button {
-        baseview::MouseButton::Left => Some(egui::PointerButton::Primary),
-        baseview::MouseButton::Right => Some(egui::PointerButton::Secondary),
-        baseview::MouseButton::Middle => Some(egui::PointerButton::Middle),
-        _ => None,
-    }
-}
-
-pub fn translate_virtual_key(key: &keyboard_types::Key) -> Option<egui::Key> {
-    use egui::Key;
-    use keyboard_types::Key as K;
-
-    Some(match key {
-        K::ArrowDown => Key::ArrowDown,
-        K::ArrowLeft => Key::ArrowLeft,
-        K::ArrowRight => Key::ArrowRight,
-        K::ArrowUp => Key::ArrowUp,
-
-        K::Escape => Key::Escape,
-        K::Tab => Key::Tab,
-        K::Backspace => Key::Backspace,
-        K::Enter => Key::Enter,
-
-        K::Insert => Key::Insert,
-        K::Delete => Key::Delete,
-        K::Home => Key::Home,
-        K::End => Key::End,
-        K::PageUp => Key::PageUp,
-        K::PageDown => Key::PageDown,
-
-        K::Character(s) => match s.chars().next()? {
-            ' ' => Key::Space,
-            '0' => Key::Num0,
-            '1' => Key::Num1,
-            '2' => Key::Num2,
-            '3' => Key::Num3,
-            '4' => Key::Num4,
-            '5' => Key::Num5,
-            '6' => Key::Num6,
-            '7' => Key::Num7,
-            '8' => Key::Num8,
-            '9' => Key::Num9,
-            'a' => Key::A,
-            'b' => Key::B,
-            'c' => Key::C,
-            'd' => Key::D,
-            'e' => Key::E,
-            'f' => Key::F,
-            'g' => Key::G,
-            'h' => Key::H,
-            'i' => Key::I,
-            'j' => Key::J,
-            'k' => Key::K,
-            'l' => Key::L,
-            'm' => Key::M,
-            'n' => Key::N,
-            'o' => Key::O,
-            'p' => Key::P,
-            'q' => Key::Q,
-            'r' => Key::R,
-            's' => Key::S,
-            't' => Key::T,
-            'u' => Key::U,
-            'v' => Key::V,
-            'w' => Key::W,
-            'x' => Key::X,
-            'y' => Key::Y,
-            'z' => Key::Z,
-            _ => {
-                return None;
-            }
-        },
-        _ => {
-            return None;
-        }
-    })
-}
-
-fn translate_cursor_icon(cursor: egui::CursorIcon) -> baseview::MouseCursor {
-    match cursor {
-        egui::CursorIcon::Default => baseview::MouseCursor::Default,
-        egui::CursorIcon::None => baseview::MouseCursor::Hidden,
-        egui::CursorIcon::ContextMenu => baseview::MouseCursor::Hand,
-        egui::CursorIcon::Help => baseview::MouseCursor::Help,
-        egui::CursorIcon::PointingHand => baseview::MouseCursor::Hand,
-        egui::CursorIcon::Progress => baseview::MouseCursor::PtrWorking,
-        egui::CursorIcon::Wait => baseview::MouseCursor::Working,
-        egui::CursorIcon::Cell => baseview::MouseCursor::Cell,
-        egui::CursorIcon::Crosshair => baseview::MouseCursor::Crosshair,
-        egui::CursorIcon::Text => baseview::MouseCursor::Text,
-        egui::CursorIcon::VerticalText => baseview::MouseCursor::VerticalText,
-        egui::CursorIcon::Alias => baseview::MouseCursor::Alias,
-        egui::CursorIcon::Copy => baseview::MouseCursor::Copy,
-        egui::CursorIcon::Move => baseview::MouseCursor::Move,
-        egui::CursorIcon::NoDrop => baseview::MouseCursor::NotAllowed,
-        egui::CursorIcon::NotAllowed => baseview::MouseCursor::NotAllowed,
-        egui::CursorIcon::Grab => baseview::MouseCursor::Hand,
-        egui::CursorIcon::Grabbing => baseview::MouseCursor::HandGrabbing,
-        egui::CursorIcon::AllScroll => baseview::MouseCursor::AllScroll,
-        egui::CursorIcon::ResizeHorizontal => baseview::MouseCursor::EwResize,
-        egui::CursorIcon::ResizeNeSw => baseview::MouseCursor::NeswResize,
-        egui::CursorIcon::ResizeNwSe => baseview::MouseCursor::NwseResize,
-        egui::CursorIcon::ResizeVertical => baseview::MouseCursor::NsResize,
-        egui::CursorIcon::ResizeEast => baseview::MouseCursor::EResize,
-        egui::CursorIcon::ResizeSouthEast => baseview::MouseCursor::SeResize,
-        egui::CursorIcon::ResizeSouth => baseview::MouseCursor::SResize,
-        egui::CursorIcon::ResizeSouthWest => baseview::MouseCursor::SwResize,
-        egui::CursorIcon::ResizeWest => baseview::MouseCursor::WResize,
-        egui::CursorIcon::ResizeNorthWest => baseview::MouseCursor::NwResize,
-        egui::CursorIcon::ResizeNorth => baseview::MouseCursor::NResize,
-        egui::CursorIcon::ResizeNorthEast => baseview::MouseCursor::NeResize,
-        egui::CursorIcon::ResizeColumn => baseview::MouseCursor::ColResize,
-        egui::CursorIcon::ResizeRow => baseview::MouseCursor::RowResize,
-        egui::CursorIcon::ZoomIn => baseview::MouseCursor::ZoomIn,
-        egui::CursorIcon::ZoomOut => baseview::MouseCursor::ZoomOut,
     }
 }
 

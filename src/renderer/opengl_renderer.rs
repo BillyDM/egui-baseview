@@ -22,7 +22,7 @@ impl Renderer {
 
         let painter = egui_glow::Painter::new(Arc::clone(&glow_context), "", None)
             .map_err(|error| {
-                eprintln!("error occurred in initializing painter:\n{}", error);
+                log::error!("Error occurred in initializing painter:\n{}", error);
             })
             .unwrap();
 

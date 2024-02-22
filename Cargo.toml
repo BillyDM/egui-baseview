@@ -1,7 +1,7 @@
 [package]
 name = "egui-baseview"
-version = "0.1.0"
-authors = ["Billy Messenger <BillyDM@protonmail.com>"]
+version = "0.2.0"
+authors = ["Billy Messenger <BillyDM@tutamail.com>"]
 edition = "2021"
 description = "A baseview backend for egui"
 license = "MIT"
@@ -14,14 +14,20 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["opengl"]
+default = ["opengl", "default_fonts"]
 opengl = ["egui_glow", "baseview/opengl"]
+default_fonts = ["egui/default_fonts"]
+## Enable parallel tessellation using [`rayon`](https://docs.rs/rayon).
+##
+## This can help performance for graphics-intense applications.
+rayon = ["egui/rayon"]
 
 [dependencies]
-egui = "0.26"
+egui = { version = "0.26", default-features = false, features = ["bytemuck"] }
 egui_glow = { version = "0.26", optional = true }
 keyboard-types = { version = "0.6", default-features = false }
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "2c1b1a7b0fef1a29a5150a6a8f6fef6a0cbab8c4" }
 raw-window-handle = "0.5"
 # TODO: Enable wayland feature when baseview gets wayland support.
 copypasta = { version = "0.10", default-features = false, features = ["x11"] }
+log = "0.4"
