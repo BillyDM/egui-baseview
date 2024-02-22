@@ -74,7 +74,7 @@ where
     start_time: Instant,
     egui_input: egui::RawInput,
     pointer_pos_in_points: Option<egui::Pos2>,
-    current_cursor_icon: Option<egui::CursorIcon>,
+    current_cursor_icon: baseview::MouseCursor,
 
     renderer: Renderer,
 
@@ -174,7 +174,7 @@ where
             start_time,
             egui_input,
             pointer_pos_in_points: None,
-            current_cursor_icon: None,
+            current_cursor_icon: baseview::MouseCursor::Default,
 
             renderer,
 
@@ -297,7 +297,7 @@ where
         for command in viewport_output.commands.iter() {
             match command {
                 ViewportCommand::Close => {
-                    window.close();
+                    self.close_requested = true;
                 }
                 ViewportCommand::InnerSize(size) => window.resize(baseview::Size {
                     width: size.x.max(1.0) as f64,
@@ -343,7 +343,11 @@ where
             self.full_output.platform_output.copied_text.clear();
         }
 
-        // TODO: Handle setting the cursor icon.
+        let cursor_icon = translate_cursor_icon(self.full_output.platform_output.cursor_icon);
+        if self.current_cursor_icon != cursor_icon {
+            self.current_cursor_icon = cursor_icon;
+            window.set_mouse_cursor(cursor_icon);
+        }
 
         if self.close_requested {
             window.close();
@@ -550,7 +554,6 @@ where
                         .focused = Some(false);
                 }
                 baseview::WindowEvent::WillClose => {}
-                _ => {}
             },
         }
 
@@ -635,6 +638,46 @@ pub fn translate_virtual_key(key: &keyboard_types::Key) -> Option<egui::Key> {
             return None;
         }
     })
+}
+
+fn translate_cursor_icon(cursor: egui::CursorIcon) -> baseview::MouseCursor {
+    match cursor {
+        egui::CursorIcon::Default => baseview::MouseCursor::Default,
+        egui::CursorIcon::None => baseview::MouseCursor::Hidden,
+        egui::CursorIcon::ContextMenu => baseview::MouseCursor::Hand,
+        egui::CursorIcon::Help => baseview::MouseCursor::Help,
+        egui::CursorIcon::PointingHand => baseview::MouseCursor::Hand,
+        egui::CursorIcon::Progress => baseview::MouseCursor::PtrWorking,
+        egui::CursorIcon::Wait => baseview::MouseCursor::Working,
+        egui::CursorIcon::Cell => baseview::MouseCursor::Cell,
+        egui::CursorIcon::Crosshair => baseview::MouseCursor::Crosshair,
+        egui::CursorIcon::Text => baseview::MouseCursor::Text,
+        egui::CursorIcon::VerticalText => baseview::MouseCursor::VerticalText,
+        egui::CursorIcon::Alias => baseview::MouseCursor::Alias,
+        egui::CursorIcon::Copy => baseview::MouseCursor::Copy,
+        egui::CursorIcon::Move => baseview::MouseCursor::Move,
+        egui::CursorIcon::NoDrop => baseview::MouseCursor::NotAllowed,
+        egui::CursorIcon::NotAllowed => baseview::MouseCursor::NotAllowed,
+        egui::CursorIcon::Grab => baseview::MouseCursor::Hand,
+        egui::CursorIcon::Grabbing => baseview::MouseCursor::HandGrabbing,
+        egui::CursorIcon::AllScroll => baseview::MouseCursor::AllScroll,
+        egui::CursorIcon::ResizeHorizontal => baseview::MouseCursor::EwResize,
+        egui::CursorIcon::ResizeNeSw => baseview::MouseCursor::NeswResize,
+        egui::CursorIcon::ResizeNwSe => baseview::MouseCursor::NwseResize,
+        egui::CursorIcon::ResizeVertical => baseview::MouseCursor::NsResize,
+        egui::CursorIcon::ResizeEast => baseview::MouseCursor::EResize,
+        egui::CursorIcon::ResizeSouthEast => baseview::MouseCursor::SeResize,
+        egui::CursorIcon::ResizeSouth => baseview::MouseCursor::SResize,
+        egui::CursorIcon::ResizeSouthWest => baseview::MouseCursor::SwResize,
+        egui::CursorIcon::ResizeWest => baseview::MouseCursor::WResize,
+        egui::CursorIcon::ResizeNorthWest => baseview::MouseCursor::NwResize,
+        egui::CursorIcon::ResizeNorth => baseview::MouseCursor::NResize,
+        egui::CursorIcon::ResizeNorthEast => baseview::MouseCursor::NeResize,
+        egui::CursorIcon::ResizeColumn => baseview::MouseCursor::ColResize,
+        egui::CursorIcon::ResizeRow => baseview::MouseCursor::RowResize,
+        egui::CursorIcon::ZoomIn => baseview::MouseCursor::ZoomIn,
+        egui::CursorIcon::ZoomOut => baseview::MouseCursor::ZoomOut,
+    }
 }
 
 fn is_cut_command(modifiers: egui::Modifiers, keycode: keyboard_types::Code) -> bool {
