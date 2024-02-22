@@ -2,7 +2,7 @@ use baseview::{
     Event, EventStatus, Window, WindowHandle, WindowHandler, WindowOpenOptions, WindowScalePolicy,
 };
 use copypasta::ClipboardProvider;
-use egui::{pos2, vec2, FullOutput, Pos2, Rect, Rgba, ViewportCommand};
+use egui::{pos2, vec2, Pos2, Rect, Rgba};
 use keyboard_types::Modifiers;
 use raw_window_handle::HasRawWindowHandle;
 use std::time::Instant;
@@ -36,10 +36,9 @@ impl<'a> Queue<'a> {
 }
 
 struct OpenSettings {
-    scale_policy: WindowScalePolicy,
-    logical_width: f64,
-    logical_height: f64,
-    title: String,
+    pub scale_policy: WindowScalePolicy,
+    pub logical_width: f64,
+    pub logical_height: f64,
 }
 
 impl OpenSettings {
@@ -54,7 +53,6 @@ impl OpenSettings {
             scale_policy,
             logical_width: settings.size.width as f64,
             logical_height: settings.size.height as f64,
-            title: settings.title.clone(),
         }
     }
 }
@@ -70,27 +68,19 @@ where
     user_update: U,
 
     egui_ctx: egui::Context,
-    viewport_id: egui::ViewportId,
-    start_time: Instant,
     egui_input: egui::RawInput,
-    pointer_pos_in_points: Option<egui::Pos2>,
-    current_cursor_icon: Option<egui::CursorIcon>,
-
-    renderer: Renderer,
-
     clipboard_ctx: Option<copypasta::ClipboardContext>,
 
+    renderer: Renderer,
+    scale_factor: f32,
+    scale_policy: WindowScalePolicy,
+    bg_color: Rgba,
     physical_width: u32,
     physical_height: u32,
-    scale_policy: WindowScalePolicy,
-    pixels_per_point: f32,
-    points_per_pixel: f32,
-    points_per_scroll_line: f32,
-    bg_color: Rgba,
-    close_requested: bool,
+    start_time: Instant,
     repaint_after: Option<Instant>,
-
-    full_output: egui::FullOutput,
+    mouse_pos: Option<Pos2>,
+    close_requested: bool,
 }
 
 impl<State, U> EguiWindow<State, U>
@@ -110,49 +100,46 @@ where
         B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
-        let renderer = Renderer::new(window);
-        let egui_ctx = egui::Context::default();
-
         // Assume scale for now until there is an event with a new one.
-        let pixels_per_point = match open_settings.scale_policy {
+        let scale = match open_settings.scale_policy {
             WindowScalePolicy::ScaleFactor(scale) => scale,
             WindowScalePolicy::SystemScaleFactor => 1.0,
         } as f32;
-        let points_per_pixel = pixels_per_point.recip();
-        let points_per_scroll_line = 50.0; // Scroll speed decided by consensus: https://github.com/emilk/egui/issues/461
 
-        let screen_rect = Rect::from_min_size(
-            Pos2::new(0f32, 0f32),
-            vec2(
-                open_settings.logical_width as f32,
-                open_settings.logical_height as f32,
-            ),
-        );
+        let egui_ctx = egui::Context::default();
 
-        let viewport_info = egui::ViewportInfo {
-            parent: None,
-            title: Some(open_settings.title),
-            native_pixels_per_point: Some(pixels_per_point),
-            focused: Some(true),
-            inner_rect: Some(screen_rect),
+        let egui_input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(
+                Pos2::new(0f32, 0f32),
+                vec2(
+                    open_settings.logical_width as f32,
+                    open_settings.logical_height as f32,
+                ),
+            )),
+            modifiers: egui::Modifiers {
+                alt: false,
+                ctrl: false,
+                shift: false,
+                mac_cmd: false,
+                command: false,
+            },
+            focused: true,
             ..Default::default()
         };
-        let viewport_id = egui::ViewportId::default();
 
-        let mut egui_input = egui::RawInput {
-            max_texture_side: Some(renderer.max_texture_side()),
-            screen_rect: Some(screen_rect),
-            ..Default::default()
-        };
-        let _ = egui_input.viewports.insert(viewport_id, viewport_info);
+        let physical_width = (open_settings.logical_width * scale as f64).round() as u32;
+        let physical_height = (open_settings.logical_height * scale as f64).round() as u32;
 
-        let physical_width = (open_settings.logical_width * pixels_per_point as f64).round() as u32;
-        let physical_height =
-            (open_settings.logical_height * pixels_per_point as f64).round() as u32;
+        let renderer = Renderer::new(window);
 
         let mut bg_color = Rgba::BLACK;
         let mut close_requested = false;
-        let mut queue = Queue::new(&mut bg_color, &mut close_requested);
+        let mut queue = Queue::new(
+            &mut bg_color,
+            //&mut renderer,
+            //&mut repaint_requested,
+            &mut close_requested,
+        );
         (build)(&egui_ctx, &mut queue, &mut state);
 
         let clipboard_ctx = match copypasta::ClipboardContext::new() {
@@ -163,34 +150,24 @@ where
             }
         };
 
-        let start_time = Instant::now();
-
         Self {
             user_state: Some(state),
             user_update: update,
 
             egui_ctx,
-            viewport_id,
-            start_time,
             egui_input,
-            pointer_pos_in_points: None,
-            current_cursor_icon: None,
-
-            renderer,
-
             clipboard_ctx,
 
+            renderer,
+            scale_factor: scale,
+            scale_policy: open_settings.scale_policy,
+            bg_color,
             physical_width,
             physical_height,
-            pixels_per_point,
-            points_per_pixel,
-            scale_policy: open_settings.scale_policy,
-            points_per_scroll_line,
-            bg_color,
+            start_time: Instant::now(),
+            repaint_after: Some(Instant::now()),
+            mouse_pos: None,
             close_requested,
-            repaint_after: Some(start_time),
-
-            full_output: FullOutput::default(),
         }
     }
 
@@ -272,81 +249,66 @@ where
     U: 'static + Send,
 {
     fn on_frame(&mut self, window: &mut Window) {
-        let Some(state) = &mut self.user_state else {
-            return;
-        };
+        if let Some(state) = &mut self.user_state {
+            self.egui_input.time = Some(self.start_time.elapsed().as_nanos() as f64 * 1e-9);
+            self.egui_ctx.begin_frame(self.egui_input.take());
 
-        self.egui_input.time = Some(self.start_time.elapsed().as_secs_f64());
-        self.egui_ctx.begin_frame(self.egui_input.take());
-
-        //let mut repaint_requested = false;
-        let mut queue = Queue::new(&mut self.bg_color, &mut self.close_requested);
-
-        (self.user_update)(&self.egui_ctx, &mut queue, state);
-
-        // Prevent data from being allocated every frame by storing this
-        // in a member field.
-        self.full_output = self.egui_ctx.end_frame();
-
-        let Some(viewport_output) = self.full_output.viewport_output.get(&self.viewport_id) else {
-            // The main window was closed by egui.
-            window.close();
-            return;
-        };
-
-        for command in viewport_output.commands.iter() {
-            match command {
-                ViewportCommand::Close => {
-                    window.close();
-                }
-                ViewportCommand::InnerSize(size) => window.resize(baseview::Size {
-                    width: size.x.max(1.0) as f64,
-                    height: size.y.max(1.0) as f64,
-                }),
-                _ => {}
-            }
-        }
-
-        let now = Instant::now();
-        let do_repaint_now = if let Some(t) = self.repaint_after {
-            now >= t || viewport_output.repaint_delay.is_zero()
-        } else {
-            viewport_output.repaint_delay.is_zero()
-        };
-
-        if do_repaint_now {
-            self.renderer.render(
-                window,
-                self.bg_color,
-                self.physical_width,
-                self.physical_height,
-                self.pixels_per_point,
-                &mut self.egui_ctx,
-                &mut self.full_output.shapes,
-                &mut self.full_output.textures_delta,
+            //let mut repaint_requested = false;
+            let mut queue = Queue::new(
+                &mut self.bg_color,
+                //&mut self.renderer,
+                //&mut repaint_requested,
+                &mut self.close_requested,
             );
 
-            self.repaint_after = None;
-        } else if let Some(repaint_after) = now.checked_add(viewport_output.repaint_delay) {
-            // Schedule to repaint after the requested time has elapsed.
-            self.repaint_after = Some(repaint_after);
-        }
+            (self.user_update)(&self.egui_ctx, &mut queue, state);
 
-        if !self.full_output.platform_output.copied_text.is_empty() {
-            if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
-                if let Err(err) =
-                    clipboard_ctx.set_contents(self.full_output.platform_output.copied_text.clone())
-                {
-                    eprintln!("Copy/Cut error: {}", err);
+            let egui::FullOutput {
+                platform_output,
+                mut textures_delta,
+                mut shapes,
+                pixels_per_point,
+                viewport_output,
+            } = self.egui_ctx.end_frame();
+
+            let now = Instant::now();
+            let do_repaint_now = if let Some(t) = self.repaint_after {
+                now >= t || repaint_after.is_zero()
+            } else {
+                repaint_after.is_zero()
+            };
+
+            if do_repaint_now {
+                self.renderer.render(
+                    window,
+                    self.bg_color,
+                    self.physical_width,
+                    self.physical_height,
+                    self.scale_factor,
+                    &mut self.egui_ctx,
+                    &mut shapes,
+                    &mut textures_delta,
+                );
+
+                self.repaint_after = None;
+            } else if let Some(repaint_after) = now.checked_add(repaint_after) {
+                // Schedule to repaint after the requested time has elapsed.
+                self.repaint_after = Some(repaint_after);
+            }
+
+            if !platform_output.copied_text.is_empty() {
+                if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
+                    if let Err(err) = clipboard_ctx.set_contents(platform_output.copied_text) {
+                        eprintln!("Copy/Cut error: {}", err);
+                    }
                 }
             }
-            self.full_output.platform_output.copied_text.clear();
-        }
 
-        // TODO: Handle setting the cursor icon.
+            // TODO: Handle setting the cursor icon.
 
-        if self.close_requested {
-            window.close();
+            if self.close_requested {
+                window.close();
+            }
         }
     }
 
@@ -360,13 +322,13 @@ where
                     self.update_modifiers(modifiers);
 
                     let pos = pos2(position.x as f32, position.y as f32);
-                    self.pointer_pos_in_points = Some(pos);
+                    self.mouse_pos = Some(pos);
                     self.egui_input.events.push(egui::Event::PointerMoved(pos));
                 }
                 baseview::MouseEvent::ButtonPressed { button, modifiers } => {
                     self.update_modifiers(modifiers);
 
-                    if let Some(pos) = self.pointer_pos_in_points {
+                    if let Some(pos) = self.mouse_pos {
                         if let Some(button) = translate_mouse_button(*button) {
                             self.egui_input.events.push(egui::Event::PointerButton {
                                 pos,
@@ -380,7 +342,7 @@ where
                 baseview::MouseEvent::ButtonReleased { button, modifiers } => {
                     self.update_modifiers(modifiers);
 
-                    if let Some(pos) = self.pointer_pos_in_points {
+                    if let Some(pos) = self.mouse_pos {
                         if let Some(button) = translate_mouse_button(*button) {
                             self.egui_input.events.push(egui::Event::PointerButton {
                                 pos,
@@ -399,10 +361,11 @@ where
 
                     let mut delta = match scroll_delta {
                         baseview::ScrollDelta::Lines { x, y } => {
-                            egui::vec2(*x, *y) * self.points_per_scroll_line
+                            let points_per_scroll_line = 50.0; // Scroll speed decided by consensus: https://github.com/emilk/egui/issues/461
+                            egui::vec2(*x, *y) * points_per_scroll_line
                         }
                         baseview::ScrollDelta::Pixels { x, y } => {
-                            egui::vec2(*x, *y) * self.points_per_pixel
+                            egui::vec2(*x, *y) / self.scale_factor
                         }
                     };
                     if cfg!(target_os = "macos") {
@@ -426,7 +389,7 @@ where
                     }
                 }
                 baseview::MouseEvent::CursorLeft => {
-                    self.pointer_pos_in_points = None;
+                    self.mouse_pos = None;
                     self.egui_input.events.push(egui::Event::PointerGone);
                 }
                 _ => {}
@@ -461,7 +424,6 @@ where
                 if let Some(key) = translate_virtual_key(&event.key) {
                     self.egui_input.events.push(egui::Event::Key {
                         key,
-                        physical_key: None,
                         pressed,
                         repeat: event.repeat,
                         modifiers: self.egui_input.modifiers,
@@ -497,57 +459,28 @@ where
             }
             baseview::Event::Window(event) => match event {
                 baseview::WindowEvent::Resized(window_info) => {
-                    self.pixels_per_point = match self.scale_policy {
+                    self.scale_factor = match self.scale_policy {
                         WindowScalePolicy::ScaleFactor(scale) => scale,
                         WindowScalePolicy::SystemScaleFactor => window_info.scale(),
                     } as f32;
-                    self.points_per_pixel = self.pixels_per_point.recip();
+
+                    let logical_size = (
+                        (window_info.physical_size().width as f32 / self.scale_factor),
+                        (window_info.physical_size().height as f32 / self.scale_factor),
+                    );
 
                     self.physical_width = window_info.physical_size().width;
                     self.physical_height = window_info.physical_size().height;
 
-                    let logical_size = (
-                        (self.physical_width as f32 * self.points_per_pixel),
-                        (self.physical_height as f32 * self.points_per_pixel),
-                    );
+                    self.egui_input.pixels_per_point = Some(self.scale_factor);
 
-                    let screen_rect = Rect::from_min_size(
+                    self.egui_input.screen_rect = Some(Rect::from_min_size(
                         Pos2::new(0f32, 0f32),
                         vec2(logical_size.0, logical_size.1),
-                    );
-
-                    self.egui_input.screen_rect = Some(screen_rect);
-
-                    let viewport_info = self
-                        .egui_input
-                        .viewports
-                        .get_mut(&self.viewport_id)
-                        .unwrap();
-                    viewport_info.native_pixels_per_point = Some(self.pixels_per_point as f32);
-                    viewport_info.inner_rect = Some(screen_rect);
+                    ));
 
                     // Schedule to repaint on the next frame.
                     self.repaint_after = Some(Instant::now());
-                }
-                baseview::WindowEvent::Focused => {
-                    self.egui_input
-                        .events
-                        .push(egui::Event::WindowFocused(true));
-                    self.egui_input
-                        .viewports
-                        .get_mut(&self.viewport_id)
-                        .unwrap()
-                        .focused = Some(true);
-                }
-                baseview::WindowEvent::Unfocused => {
-                    self.egui_input
-                        .events
-                        .push(egui::Event::WindowFocused(false));
-                    self.egui_input
-                        .viewports
-                        .get_mut(&self.viewport_id)
-                        .unwrap()
-                        .focused = Some(false);
                 }
                 baseview::WindowEvent::WillClose => {}
                 _ => {}
@@ -568,8 +501,8 @@ pub fn translate_mouse_button(button: baseview::MouseButton) -> Option<egui::Poi
 }
 
 pub fn translate_virtual_key(key: &keyboard_types::Key) -> Option<egui::Key> {
-    use egui::Key;
     use keyboard_types::Key as K;
+    use egui::Key;
 
     Some(match key {
         K::ArrowDown => Key::ArrowDown,
@@ -589,48 +522,50 @@ pub fn translate_virtual_key(key: &keyboard_types::Key) -> Option<egui::Key> {
         K::PageUp => Key::PageUp,
         K::PageDown => Key::PageDown,
 
-        K::Character(s) => match s.chars().next()? {
-            ' ' => Key::Space,
-            '0' => Key::Num0,
-            '1' => Key::Num1,
-            '2' => Key::Num2,
-            '3' => Key::Num3,
-            '4' => Key::Num4,
-            '5' => Key::Num5,
-            '6' => Key::Num6,
-            '7' => Key::Num7,
-            '8' => Key::Num8,
-            '9' => Key::Num9,
-            'a' => Key::A,
-            'b' => Key::B,
-            'c' => Key::C,
-            'd' => Key::D,
-            'e' => Key::E,
-            'f' => Key::F,
-            'g' => Key::G,
-            'h' => Key::H,
-            'i' => Key::I,
-            'j' => Key::J,
-            'k' => Key::K,
-            'l' => Key::L,
-            'm' => Key::M,
-            'n' => Key::N,
-            'o' => Key::O,
-            'p' => Key::P,
-            'q' => Key::Q,
-            'r' => Key::R,
-            's' => Key::S,
-            't' => Key::T,
-            'u' => Key::U,
-            'v' => Key::V,
-            'w' => Key::W,
-            'x' => Key::X,
-            'y' => Key::Y,
-            'z' => Key::Z,
-            _ => {
-                return None;
+        K::Character(s) => {
+            match s.chars().next()? {
+                ' ' => Key::Space,
+                '0' => Key::Num0,
+                '1' => Key::Num1,
+                '2' => Key::Num2,
+                '3' => Key::Num3,
+                '4' => Key::Num4,
+                '5' => Key::Num5,
+                '6' => Key::Num6,
+                '7' => Key::Num7,
+                '8' => Key::Num8,
+                '9' => Key::Num9,
+                'a' => Key::A,
+                'b' => Key::B,
+                'c' => Key::C,
+                'd' => Key::D,
+                'e' => Key::E,
+                'f' => Key::F,
+                'g' => Key::G,
+                'h' => Key::H,
+                'i' => Key::I,
+                'j' => Key::J,
+                'k' => Key::K,
+                'l' => Key::L,
+                'm' => Key::M,
+                'n' => Key::N,
+                'o' => Key::O,
+                'p' => Key::P,
+                'q' => Key::Q,
+                'r' => Key::R,
+                's' => Key::S,
+                't' => Key::T,
+                'u' => Key::U,
+                'v' => Key::V,
+                'w' => Key::W,
+                'x' => Key::X,
+                'y' => Key::Y,
+                'z' => Key::Z,
+                _ => {
+                    return None;
+                }
             }
-        },
+        }
         _ => {
             return None;
         }

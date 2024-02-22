@@ -36,6 +36,10 @@ impl Renderer {
         }
     }
 
+    pub fn max_texture_side(&self) -> usize {
+        self.painter.max_texture_side()
+    }
+
     pub fn render(
         &mut self,
         window: &Window,
@@ -68,7 +72,7 @@ impl Renderer {
             self.painter.set_texture(id, &image_delta);
         }
 
-        let clipped_primitives = egui_ctx.tessellate(shapes);
+        let clipped_primitives = egui_ctx.tessellate(shapes, pixels_per_point);
         let dimensions: [u32; 2] = [canvas_width, canvas_height];
 
         self.painter

@@ -18,9 +18,10 @@ default = ["opengl"]
 opengl = ["egui_glow", "baseview/opengl"]
 
 [dependencies]
-egui = "0.22"
-egui_glow = { version = "0.22", optional = true }
-keyboard-types = { version = "0.6.1", default-features = false }
-baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "1d9806d5bd92275d0d8142d9c9c90198757b9b25" }
-raw-window-handle = "0.4.2"
-copypasta = "0.8"
+egui = "0.26"
+egui_glow = { version = "0.26", optional = true }
+keyboard-types = { version = "0.6", default-features = false }
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "2c1b1a7b0fef1a29a5150a6a8f6fef6a0cbab8c4" }
+raw-window-handle = "0.5"
+# TODO: Enable wayland feature when baseview gets wayland support.
+copypasta = { version = "0.10", default-features = false, features = ["x11"] }
