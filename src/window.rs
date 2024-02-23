@@ -351,6 +351,9 @@ where
             crate::translate::translate_cursor_icon(self.full_output.platform_output.cursor_icon);
         if self.current_cursor_icon != cursor_icon {
             self.current_cursor_icon = cursor_icon;
+
+            // TODO: Set mouse cursor for other platforms once baseview supports it.
+            #[cfg(target_os = "linux")]
             window.set_mouse_cursor(cursor_icon);
         }
     }
