@@ -79,7 +79,7 @@ impl Renderer {
                 // will this work? i have no idea!
                 raw_window_handle::RawWindowHandle::Win32(handle) => {
                     raw_window_handle_06::RawWindowHandle::Win32(Win32WindowHandle::new(
-                        NonZeroIsize::new(unsafe { *handle.hwnd.cast() }).unwrap(),
+                        NonZeroIsize::new(unsafe { handle.hwnd.read_unaligned() as isize }).unwrap(),
                     ))
                 }
                 _ => todo!(),
