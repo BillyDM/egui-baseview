@@ -7,6 +7,7 @@ fn main() {
         title: String::from("egui-baseview simple demo"),
         size: Size::new(400.0, 200.0),
         scale: WindowScalePolicy::SystemScaleFactor,
+        #[cfg(feature = "opengl")]
         gl_config: Some(Default::default()),
     };
 

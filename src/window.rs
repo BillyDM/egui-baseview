@@ -215,9 +215,9 @@ where
         B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
-        if settings.gl_config.is_none() {
-            settings.gl_config = Some(Default::default());
-        }
+        // if settings.gl_config.is_none() {
+        //     settings.gl_config = Some(Default::default());
+        // }
 
         let open_settings = OpenSettings::new(&settings);
 
@@ -243,9 +243,9 @@ where
         B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
-        if settings.gl_config.is_none() {
-            settings.gl_config = Some(Default::default());
-        }
+        // if settings.gl_config.is_none() {
+        //     settings.gl_config = Some(Default::default());
+        // }
 
         let open_settings = OpenSettings::new(&settings);
 
