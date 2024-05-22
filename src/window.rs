@@ -217,7 +217,7 @@ where
     {
         #[cfg(feature = "opengl")]
         if settings.gl_config.is_none() {
-             settings.gl_config = Some(Default::default());
+            settings.gl_config = Some(Default::default());
         }
 
         let open_settings = OpenSettings::new(&settings);
