@@ -78,9 +78,12 @@ impl Renderer {
                 }
                 // will this work? i have no idea!
                 raw_window_handle::RawWindowHandle::Win32(handle) => {
-                    raw_window_handle_06::RawWindowHandle::Win32(Win32WindowHandle::new(
-                        NonZeroIsize::new(unsafe { handle.hwnd.read_unaligned() as isize }).unwrap(),
-                    ))
+                    let mut raw_handle = Win32WindowHandle::new(NonZeroIsize::new(handle.hwnd as isize).unwrap());
+
+                    raw_handle.hinstance = handle.hinstance.is_null().then_some(NonZeroIsize::new(handle.hinstance as isize).unwrap());
+
+                    
+                    raw_window_handle_06::RawWindowHandle::Win32(raw_handle)
                 }
                 _ => todo!(),
             },
