@@ -16,19 +16,24 @@ readme = "README.md"
 [features]
 default = ["opengl", "default_fonts"]
 opengl = ["egui_glow", "baseview/opengl"]
+wgpu = ["egui-wgpu", "raw-window-handle-06", "pollster"]
 default_fonts = ["egui/default_fonts"]
 ## Enable parallel tessellation using [`rayon`](https://docs.rs/rayon).
 ##
 ## This can help performance for graphics-intense applications.
 rayon = ["egui/rayon"]
+pollster = ["dep:pollster"]
 
 [dependencies]
 egui = { version = "0.28", default-features = false, features = ["bytemuck"] }
 egui_glow = { version = "0.28", optional = true }
+egui_wgpu = { version = "0.28", optional = true }
 keyboard-types = { version = "0.6", default-features = false }
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "45465c5f46abed6c6ce370fffde5edc8e4cd5aa3" }
 raw-window-handle = "0.5"
+raw-window-handle-06 = { package = "raw-window-handle", version = "0.6", optional = true }
 # TODO: Enable wayland feature when baseview gets wayland support.
 copypasta = { version = "0.10", default-features = false, features = ["x11"] }
 log = "0.4"
 open = "5.1"
+pollster = { version = "0.3.0", optional = true }
