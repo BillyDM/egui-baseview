@@ -549,6 +549,9 @@ where
                     viewport_info.native_pixels_per_point = Some(self.pixels_per_point as f32);
                     viewport_info.inner_rect = Some(screen_rect);
 
+                    #[cfg(feature = "wgpu")]
+                    self.renderer.resize_and_generate_msaa_view(self.physical_width, self.physical_height);
+
                     // Schedule to repaint on the next frame.
                     self.repaint_after = Some(Instant::now());
                 }

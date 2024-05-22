@@ -142,7 +142,7 @@ impl Renderer {
             .configure(&self.render_state.device, &surf_config);
     }
 
-    fn resize_and_generate_msaa_view(&mut self, width: u32, height: u32) {
+    pub fn resize_and_generate_msaa_view(&mut self, width: u32, height: u32) {
         let render_state = self.render_state.as_ref();
 
         self.width = width;
