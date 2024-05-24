@@ -81,7 +81,7 @@ impl Renderer {
                 raw_window_handle::RawWindowHandle::Win32(handle) => {
                     let mut raw_handle = Win32WindowHandle::new(NonZeroIsize::new(handle.hwnd as isize).unwrap());
 
-                    raw_handle.hinstance = handle.hinstance.is_null().then_some(NonZeroIsize::new(handle.hinstance as isize).unwrap());
+                    raw_handle.hinstance = handle.hinstance.is_null().then(|| { NonZeroIsize::new(handle.hinstance as isize).unwrap() });
 
                     
                     raw_window_handle_06::RawWindowHandle::Win32(raw_handle)
