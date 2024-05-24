@@ -1,4 +1,5 @@
 use baseview::Window;
+use egui::FullOutput;
 use egui_glow::Painter;
 use std::sync::Arc;
 
@@ -16,6 +17,7 @@ impl Renderer {
             context.make_current();
         }
 
+        #[allow(clippy::arc_with_non_send_sync)]
         let glow_context = Arc::new(unsafe {
             egui_glow::glow::Context::from_loader_function(|s| context.get_proc_address(s))
         });
@@ -44,15 +46,14 @@ impl Renderer {
         &mut self,
         window: &Window,
         bg_color: egui::Rgba,
-        canvas_width: u32,
-        canvas_height: u32,
+        dimensions: (u32, u32),
         pixels_per_point: f32,
         egui_ctx: &mut egui::Context,
-        shapes: &mut Vec<egui::epaint::ClippedShape>,
-        textures_delta: &mut egui::TexturesDelta,
+        full_output: &mut FullOutput
     ) {
-        let shapes = std::mem::take(shapes);
-        let mut textures_delta = std::mem::take(textures_delta);
+        let (canvas_width, canvas_height) = dimensions;
+        let shapes = std::mem::take(&mut full_output.shapes);
+        let textures_delta = &mut full_output.textures_delta;
 
         let context = window
             .gl_context()
@@ -68,8 +69,8 @@ impl Renderer {
             self.glow_context.clear(egui_glow::glow::COLOR_BUFFER_BIT);
         }
 
-        for (id, image_delta) in textures_delta.set {
-            self.painter.set_texture(id, &image_delta);
+        for (id, image_delta) in &textures_delta.set {
+            self.painter.set_texture(*id, image_delta);
         }
 
         let clipped_primitives = egui_ctx.tessellate(shapes, pixels_per_point);
