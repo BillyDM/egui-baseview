@@ -5,6 +5,7 @@ use std::{
 };
 
 use baseview::Window;
+use egui::FullOutput;
 use egui_wgpu::{
     wgpu::{
         Color, CommandEncoderDescriptor, Extent3d, Instance, InstanceDescriptor,
@@ -12,7 +13,7 @@ use egui_wgpu::{
         SurfaceTargetUnsafe, TextureDescriptor, TextureDimension, TextureUsages, TextureView,
         TextureViewDescriptor,
     },
-    RenderState, ScreenDescriptor, WgpuConfiguration,
+    RenderState, ScreenDescriptor, WgpuConfiguration, WgpuError,
 };
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use raw_window_handle_06::{
@@ -32,7 +33,7 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(window: &Window) -> Self {
+    pub fn new(window: &Window) -> Result<Self, WgpuError> {
         let instance = Instance::new(InstanceDescriptor::default());
 
         let raw_display_handle = window.raw_display_handle();
@@ -99,18 +100,19 @@ impl Renderer {
                 &surface,
                 None,
                 MSAA_SAMPLES,
-            ))
-            .unwrap(),
+            ))?,
         );
 
-        Self {
-            render_state: state,
-            surface,
-            configuration,
-            msaa_texture_view: None,
-            width: 0,
-            height: 0,
-        }
+        Ok(
+            Self {
+                render_state: state,
+                surface,
+                configuration,
+                msaa_texture_view: None,
+                width: 0,
+                height: 0,
+            }
+        )
     }
 
     pub fn max_texture_side(&self) -> usize {
@@ -177,16 +179,14 @@ impl Renderer {
 
     pub fn render(
         &mut self,
-        _window: &Window,
         bg_color: egui::Rgba,
-        canvas_width: u32,
-        canvas_height: u32,
+        dimensions: (u32, u32),
         pixels_per_point: f32,
         egui_ctx: &mut egui::Context,
-        shapes: &mut Vec<egui::epaint::ClippedShape>,
-        textures_delta: &mut egui::TexturesDelta,
+        full_output: &mut FullOutput
     ) {
-        let shapes = std::mem::take(shapes);
+        let (canvas_width, canvas_height) = dimensions;
+        let shapes = std::mem::take(&mut full_output.shapes);
 
         let clipped_primitives = egui_ctx.tessellate(shapes, pixels_per_point);
 
@@ -204,7 +204,7 @@ impl Renderer {
 
         let user_cmd_bufs = {
             let mut renderer = self.render_state.renderer.write();
-            for (id, image_delta) in &textures_delta.set {
+            for (id, image_delta) in &full_output.textures_delta.set {
                 renderer.update_texture(
                     &self.render_state.device,
                     &self.render_state.queue,
@@ -273,7 +273,7 @@ impl Renderer {
 
         {
             let mut renderer = self.render_state.renderer.write();
-            for id in &textures_delta.free {
+            for id in &full_output.textures_delta.free {
                 renderer.free_texture(id);
             }
         }

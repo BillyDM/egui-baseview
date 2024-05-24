@@ -3,12 +3,12 @@ use baseview::{
     WindowScalePolicy,
 };
 use copypasta::ClipboardProvider;
-use egui::{pos2, vec2, FullOutput, Pos2, Rect, Rgba, ViewportCommand};
+use egui::{pos2, vec2, Pos2, Rect, Rgba, ViewportCommand};
 use keyboard_types::Modifiers;
 use raw_window_handle::HasRawWindowHandle;
 use std::time::Instant;
 
-use crate::renderer::Renderer;
+use crate::renderer::{get_renderer, Renderer};
 
 pub struct Queue<'a> {
     bg_color: &'a mut Rgba,
@@ -64,8 +64,8 @@ impl OpenSettings {
 
         Self {
             scale_policy,
-            logical_width: settings.size.width as f64,
-            logical_height: settings.size.height as f64,
+            logical_width: settings.size.width,
+            logical_height: settings.size.height,
             title: settings.title.clone(),
         }
     }
@@ -99,8 +99,6 @@ where
     bg_color: Rgba,
     close_requested: bool,
     repaint_after: Option<Instant>,
-
-    full_output: egui::FullOutput,
 }
 
 impl<State, U> EguiWindow<State, U>
@@ -120,7 +118,7 @@ where
         B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
-        let renderer = Renderer::new(window);
+        let renderer = get_renderer(window);
         let egui_ctx = egui::Context::default();
 
         // Assume scale for now until there is an event with a new one.
@@ -197,8 +195,6 @@ where
             bg_color,
             close_requested,
             repaint_after: Some(start_time),
-
-            full_output: FullOutput::default(),
         }
     }
 
@@ -213,7 +209,7 @@ where
     /// application and build the UI.
     pub fn open_parented<P, B>(
         parent: &P,
-        mut settings: WindowOpenOptions,
+        #[allow(unused_mut)] mut settings: WindowOpenOptions,
         state: State,
         build: B,
         update: U,
@@ -247,8 +243,12 @@ where
     /// call `ctx.set_fonts()`. Optional.
     /// * `update` - Called before each frame. Here you should update the state of your
     /// application and build the UI.
-    pub fn open_blocking<B>(mut settings: WindowOpenOptions, state: State, build: B, update: U)
-    where
+    pub fn open_blocking<B>(
+        #[allow(unused_mut)] mut settings: WindowOpenOptions,
+        state: State,
+        build: B,
+        update: U,
+    ) where
         B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
@@ -309,9 +309,9 @@ where
 
         // Prevent data from being allocated every frame by storing this
         // in a member field.
-        self.full_output = self.egui_ctx.end_frame();
+        let mut full_output = self.egui_ctx.end_frame();
 
-        let Some(viewport_output) = self.full_output.viewport_output.get(&self.viewport_id) else {
+        let Some(viewport_output) = full_output.viewport_output.get(&self.viewport_id) else {
             // The main window was closed by egui.
             window.close();
             return;
@@ -341,11 +341,10 @@ where
             self.renderer.render(
                 window,
                 self.bg_color,
-                self.physical_size,
+                (self.physical_width, self.physical_height),
                 self.pixels_per_point,
                 &mut self.egui_ctx,
-                &mut self.full_output.shapes,
-                &mut self.full_output.textures_delta,
+                &mut full_output,
             );
 
             self.repaint_after = None;
@@ -354,15 +353,14 @@ where
             self.repaint_after = Some(repaint_after);
         }
 
-        if !self.full_output.platform_output.copied_text.is_empty() {
+        if !full_output.platform_output.copied_text.is_empty() {
             if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
                 if let Err(err) =
-                    clipboard_ctx.set_contents(self.full_output.platform_output.copied_text.clone())
+                    clipboard_ctx.set_contents(full_output.platform_output.copied_text.clone())
                 {
                     log::error!("Copy/Cut error: {}", err);
                 }
             }
-            self.full_output.platform_output.copied_text.clear();
         }
 
         if let Some(open_url) = &self.full_output.platform_output.open_url {
@@ -372,7 +370,7 @@ where
         }
 
         let cursor_icon =
-            crate::translate::translate_cursor_icon(self.full_output.platform_output.cursor_icon);
+            crate::translate::translate_cursor_icon(full_output.platform_output.cursor_icon);
         if self.current_cursor_icon != cursor_icon {
             self.current_cursor_icon = cursor_icon;
 
@@ -482,7 +480,7 @@ where
                             self.egui_input.modifiers.mac_cmd = pressed;
                             self.egui_input.modifiers.command = pressed;
                         }
-                        () // prevent `rustfmt` from breaking this
+                        // prevent `rustfmt` from breaking this
                     }
                     _ => (),
                 }
@@ -546,7 +544,7 @@ where
                         .viewports
                         .get_mut(&self.viewport_id)
                         .unwrap();
-                    viewport_info.native_pixels_per_point = Some(self.pixels_per_point as f32);
+                    viewport_info.native_pixels_per_point = Some(self.pixels_per_point);
                     viewport_info.inner_rect = Some(screen_rect);
 
                     // Schedule to repaint on the next frame.
