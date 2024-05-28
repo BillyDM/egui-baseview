@@ -363,7 +363,7 @@ where
             }
         }
 
-        if let Some(open_url) = &self.full_output.platform_output.open_url {
+        if let Some(open_url) = &full_output.platform_output.open_url {
             if let Err(err) = open::that_detached(&open_url.url) {
                 log::error!("Open error: {}", err);
             }
