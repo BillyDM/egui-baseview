@@ -31,3 +31,4 @@ raw-window-handle = "0.5"
 # TODO: Enable wayland feature when baseview gets wayland support.
 copypasta = { version = "0.10", default-features = false, features = ["x11"] }
 log = "0.4"
+open = "5.1"
