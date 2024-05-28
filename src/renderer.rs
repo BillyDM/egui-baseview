@@ -15,14 +15,14 @@ pub(crate) enum Renderer {
 }
 
 impl Renderer {
-    pub(crate) fn render(&mut self, window: &Window, bg_color: egui::Rgba,
+    pub(crate) fn render(&mut self, _window: &Window, bg_color: egui::Rgba,
         dimensions: (u32, u32),
         pixels_per_point: f32,
         egui_ctx: &mut egui::Context,
         full_output: &mut FullOutput) {
             match self {
                 #[cfg(feature = "opengl")]
-                Renderer::OpenGL(renderer) => renderer.render(window, bg_color, dimensions, pixels_per_point, egui_ctx, full_output),
+                Renderer::OpenGL(renderer) => renderer.render(_window, bg_color, dimensions, pixels_per_point, egui_ctx, full_output),
                 #[cfg(feature = "wgpu")]
                 Renderer::Wgpu(renderer) => renderer.render(bg_color, dimensions, pixels_per_point, egui_ctx, full_output),
                 #[allow(unreachable_patterns)]
@@ -48,8 +48,12 @@ pub(crate) fn get_renderer(window: &Window) -> Renderer {
     #[cfg(not(any(feature = "opengl", feature = "wgpu")))]
     compile_error!("No renderer present. Please enable either opengl or wgpu in the crate's features");
 
+    #[cfg(all(feature = "wgpu", feature = "opengl"))]
+    compile_error!("Both renderers enabled, which is unnesecarry. Either use just wgpu, or opengl");
+
     #[cfg(feature = "wgpu")]
-    if let Ok(renderer) = wgpu_renderer::Renderer::new(window) {
+    {
+        let renderer = wgpu_renderer::Renderer::new(window).expect("wgpu backend failed to initalize");
         return Renderer::Wgpu(renderer);
     }
 

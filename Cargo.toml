@@ -16,7 +16,7 @@ readme = "README.md"
 [features]
 default = ["wgpu", "default_fonts"]
 opengl = ["egui_glow", "baseview/opengl"]
-wgpu = ["egui-wgpu", "raw-window-handle-06", "pollster", "dep:wgpu", "opengl"]
+wgpu = ["egui-wgpu", "raw-window-handle-06", "pollster", "dep:wgpu"]
 default_fonts = ["egui/default_fonts"]
 ## Enable parallel tessellation using [`rayon`](https://docs.rs/rayon).
 ##
