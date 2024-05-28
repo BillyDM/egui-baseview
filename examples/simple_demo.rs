@@ -36,6 +36,8 @@ fn main() {
                 if ui.button("close window").clicked() {
                     queue.close_window();
                 }
+
+                ui.hyperlink_to("free crouton", "https://crouton.net");
             });
         },
     );

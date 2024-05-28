@@ -342,6 +342,12 @@ where
             }
         }
 
+        if let Some(open_url) = &self.full_output.platform_output.open_url {
+            if let Err(err) = open::that_detached(&open_url.url) {
+                log::error!("Open error: {}", err);
+            }
+        }
+
         let cursor_icon =
             crate::translate::translate_cursor_icon(full_output.platform_output.cursor_icon);
         if self.current_cursor_icon != cursor_icon {
