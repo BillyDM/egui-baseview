@@ -406,12 +406,12 @@ where
                 } => {
                     self.update_modifiers(modifiers);
 
-                    let mut delta = match scroll_delta {
+                    let (unit, mut delta) = match scroll_delta {
                         baseview::ScrollDelta::Lines { x, y } => {
-                            egui::vec2(*x, *y) * self.points_per_scroll_line
+                            (egui::MouseWheelUnit::Line, egui::vec2(*x, *y) * self.points_per_scroll_line)
                         }
                         baseview::ScrollDelta::Pixels { x, y } => {
-                            egui::vec2(*x, *y) * self.points_per_pixel
+                            (egui::MouseWheelUnit::Point, egui::vec2(*x, *y) * self.points_per_pixel)
                         }
                     };
                     if cfg!(target_os = "macos") {
@@ -420,19 +420,7 @@ where
                         delta.x *= -1.0;
                     }
 
-                    if self.egui_input.modifiers.ctrl || self.egui_input.modifiers.command {
-                        // Treat as zoom instead:
-                        let factor = (delta.y / 200.0).exp();
-                        self.egui_input.events.push(egui::Event::Zoom(factor));
-                    } else if self.egui_input.modifiers.shift {
-                        // Treat as horizontal scrolling.
-                        // Note: one Mac we already get horizontal scroll events when shift is down.
-                        self.egui_input
-                            .events
-                            .push(egui::Event::Scroll(egui::vec2(delta.x + delta.y, 0.0)));
-                    } else {
-                        self.egui_input.events.push(egui::Event::Scroll(delta));
-                    }
+                    self.egui_input.events.push(egui::Event::MouseWheel { unit, delta, modifiers: self.egui_input.modifiers })
                 }
                 baseview::MouseEvent::CursorLeft => {
                     self.pointer_pos_in_points = None;
