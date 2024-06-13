@@ -7,6 +7,7 @@ fn main() {
         title: String::from("egui-baseview hello world"),
         size: Size::new(300.0, 110.0),
         scale: WindowScalePolicy::SystemScaleFactor,
+        #[cfg(feature = "opengl")]
         gl_config: Some(Default::default()),
     };
 
@@ -17,7 +18,7 @@ fn main() {
         state,
         |_egui_ctx: &Context, _queue: &mut Queue, _state: &mut ()| {},
         |egui_ctx: &Context, _queue: &mut Queue, _state: &mut ()| {
-            egui::Window::new("egui-baseview hello world").show(&egui_ctx, |ui| {
+            egui::Window::new("egui-baseview hello world").show(egui_ctx, |ui| {
                 ui.label("Hello World!");
             });
         },
