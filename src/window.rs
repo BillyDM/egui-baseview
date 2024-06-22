@@ -12,21 +12,36 @@ use crate::renderer::Renderer;
 pub struct Queue<'a> {
     bg_color: &'a mut Rgba,
     close_requested: &'a mut bool,
+    physical_width: &'a mut u32,
+    physical_height: &'a mut u32,
 }
 
 impl<'a> Queue<'a> {
-    pub(crate) fn new(bg_color: &'a mut Rgba, close_requested: &'a mut bool) -> Self {
+    pub(crate) fn new(
+        bg_color: &'a mut Rgba,
+        close_requested: &'a mut bool,
+        physical_width: &'a mut u32,
+        physical_height: &'a mut u32,
+    ) -> Self {
         Self {
             bg_color,
             //renderer,
             //repaint_requested,
             close_requested,
+            physical_width,
+            physical_height,
         }
     }
 
     /// Set the background color.
     pub fn bg_color(&mut self, bg_color: Rgba) {
         *self.bg_color = bg_color;
+    }
+
+    /// Set size of the window.
+    pub fn resize(&mut self, width: u32, height: u32) {
+        *self.physical_width = width;
+        *self.physical_height = height;
     }
 
     /// Close the window.
@@ -146,13 +161,19 @@ where
         };
         let _ = egui_input.viewports.insert(viewport_id, viewport_info);
 
-        let physical_width = (open_settings.logical_width * pixels_per_point as f64).round() as u32;
-        let physical_height =
+        let mut physical_width =
+            (open_settings.logical_width * pixels_per_point as f64).round() as u32;
+        let mut physical_height =
             (open_settings.logical_height * pixels_per_point as f64).round() as u32;
 
         let mut bg_color = Rgba::BLACK;
         let mut close_requested = false;
-        let mut queue = Queue::new(&mut bg_color, &mut close_requested);
+        let mut queue = Queue::new(
+            &mut bg_color,
+            &mut close_requested,
+            &mut physical_width,
+            &mut physical_height,
+        );
         (build)(&egui_ctx, &mut queue, &mut state);
 
         let clipboard_ctx = match copypasta::ClipboardContext::new() {
@@ -277,10 +298,21 @@ where
         };
 
         self.egui_input.time = Some(self.start_time.elapsed().as_secs_f64());
+        self.egui_input.screen_rect = Some(calculate_screen_rect(
+            self.physical_width,
+            self.physical_height,
+            self.points_per_pixel,
+        ));
+
         self.egui_ctx.begin_frame(self.egui_input.take());
 
         //let mut repaint_requested = false;
-        let mut queue = Queue::new(&mut self.bg_color, &mut self.close_requested);
+        let mut queue = Queue::new(
+            &mut self.bg_color,
+            &mut self.close_requested,
+            &mut self.physical_width,
+            &mut self.physical_height,
+        );
 
         (self.user_update)(&self.egui_ctx, &mut queue, state);
 
@@ -520,14 +552,10 @@ where
                     self.physical_width = window_info.physical_size().width;
                     self.physical_height = window_info.physical_size().height;
 
-                    let logical_size = (
-                        (self.physical_width as f32 * self.points_per_pixel),
-                        (self.physical_height as f32 * self.points_per_pixel),
-                    );
-
-                    let screen_rect = Rect::from_min_size(
-                        Pos2::new(0f32, 0f32),
-                        vec2(logical_size.0, logical_size.1),
+                    let screen_rect = calculate_screen_rect(
+                        self.physical_width,
+                        self.physical_height,
+                        self.points_per_pixel,
                     );
 
                     self.egui_input.screen_rect = Some(screen_rect);
@@ -590,4 +618,13 @@ fn is_paste_command(modifiers: egui::Modifiers, keycode: keyboard_types::Code) -
         || (cfg!(target_os = "windows")
             && modifiers.shift
             && keycode == keyboard_types::Code::Insert)
+}
+
+/// Calculate screen rectangle in logical size.
+fn calculate_screen_rect(physical_width: u32, physical_height: u32, points_per_pixel: f32) -> Rect {
+    let logical_size = (
+        physical_width as f32 * points_per_pixel,
+        physical_height as f32 * points_per_pixel,
+    );
+    Rect::from_min_size(Pos2::new(0f32, 0f32), vec2(logical_size.0, logical_size.1))
 }
