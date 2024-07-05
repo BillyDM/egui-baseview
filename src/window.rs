@@ -96,7 +96,6 @@ where
     scale_policy: WindowScalePolicy,
     pixels_per_point: f32,
     points_per_pixel: f32,
-    points_per_scroll_line: f32,
     bg_color: Rgba,
     close_requested: bool,
     repaint_after: Option<Instant>,
@@ -130,7 +129,6 @@ where
             WindowScalePolicy::SystemScaleFactor => 1.0,
         } as f32;
         let points_per_pixel = pixels_per_point.recip();
-        let points_per_scroll_line = 50.0; // Scroll speed decided by consensus: https://github.com/emilk/egui/issues/461
 
         let screen_rect = Rect::from_min_size(
             Pos2::new(0f32, 0f32),
@@ -196,7 +194,6 @@ where
             pixels_per_point,
             points_per_pixel,
             scale_policy: open_settings.scale_policy,
-            points_per_scroll_line,
             bg_color,
             close_requested,
             repaint_after: Some(start_time),
@@ -430,33 +427,30 @@ where
                 } => {
                     self.update_modifiers(modifiers);
 
-                    let mut delta = match scroll_delta {
+                    #[allow(unused_mut)]
+                    let (unit, mut delta) = match scroll_delta {
                         baseview::ScrollDelta::Lines { x, y } => {
-                            egui::vec2(*x, *y) * self.points_per_scroll_line
+                            (egui::MouseWheelUnit::Line, egui::vec2(*x, *y))
                         }
-                        baseview::ScrollDelta::Pixels { x, y } => {
-                            egui::vec2(*x, *y) * self.points_per_pixel
-                        }
+                        baseview::ScrollDelta::Pixels { x, y } => (
+                            egui::MouseWheelUnit::Point,
+                            egui::vec2(*x * self.points_per_pixel, *y * self.points_per_pixel),
+                        ),
                     };
+
                     if cfg!(target_os = "macos") {
                         // This is still buggy in winit despite
                         // https://github.com/rust-windowing/winit/issues/1695 being closed
+                        //
+                        // TODO: See if this is an issue in baseview as well.
                         delta.x *= -1.0;
                     }
 
-                    if self.egui_input.modifiers.ctrl || self.egui_input.modifiers.command {
-                        // Treat as zoom instead:
-                        let factor = (delta.y / 200.0).exp();
-                        self.egui_input.events.push(egui::Event::Zoom(factor));
-                    } else if self.egui_input.modifiers.shift {
-                        // Treat as horizontal scrolling.
-                        // Note: one Mac we already get horizontal scroll events when shift is down.
-                        self.egui_input
-                            .events
-                            .push(egui::Event::Scroll(egui::vec2(delta.x + delta.y, 0.0)));
-                    } else {
-                        self.egui_input.events.push(egui::Event::Scroll(delta));
-                    }
+                    self.egui_input.events.push(egui::Event::MouseWheel {
+                        unit,
+                        delta,
+                        modifiers: self.egui_input.modifiers,
+                    });
                 }
                 baseview::MouseEvent::CursorLeft => {
                     self.pointer_pos_in_points = None;
@@ -504,6 +498,8 @@ where
                 if pressed {
                     // VirtualKeyCode::Paste etc in winit are broken/untrustworthy,
                     // so we detect these things manually:
+                    //
+                    // TODO: See if this is an issue in baseview as well.
                     if is_cut_command(self.egui_input.modifiers, event.code) {
                         self.egui_input.events.push(egui::Event::Cut);
                     } else if is_copy_command(self.egui_input.modifiers, event.code) {

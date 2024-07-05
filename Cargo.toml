@@ -23,8 +23,8 @@ default_fonts = ["egui/default_fonts"]
 rayon = ["egui/rayon"]
 
 [dependencies]
-egui = { version = "0.27", default-features = false, features = ["bytemuck"] }
-egui_glow = { version = "0.27", optional = true }
+egui = { version = "0.28", default-features = false, features = ["bytemuck"] }
+egui_glow = { version = "0.28", optional = true }
 keyboard-types = { version = "0.6", default-features = false }
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "45465c5f46abed6c6ce370fffde5edc8e4cd5aa3" }
 raw-window-handle = "0.5"
