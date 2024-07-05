@@ -1,5 +1,6 @@
 use baseview::{
-    Event, EventStatus, Window, WindowHandle, WindowHandler, WindowOpenOptions, WindowScalePolicy,
+    Event, EventStatus, PhySize, Window, WindowHandle, WindowHandler, WindowOpenOptions,
+    WindowScalePolicy,
 };
 use copypasta::ClipboardProvider;
 use egui::{pos2, vec2, FullOutput, Pos2, Rect, Rgba, ViewportCommand};
@@ -12,24 +13,21 @@ use crate::renderer::Renderer;
 pub struct Queue<'a> {
     bg_color: &'a mut Rgba,
     close_requested: &'a mut bool,
-    physical_width: &'a mut u32,
-    physical_height: &'a mut u32,
+    physical_size: &'a mut PhySize,
 }
 
 impl<'a> Queue<'a> {
     pub(crate) fn new(
         bg_color: &'a mut Rgba,
         close_requested: &'a mut bool,
-        physical_width: &'a mut u32,
-        physical_height: &'a mut u32,
+        physical_size: &'a mut PhySize,
     ) -> Self {
         Self {
             bg_color,
             //renderer,
             //repaint_requested,
             close_requested,
-            physical_width,
-            physical_height,
+            physical_size,
         }
     }
 
@@ -39,9 +37,8 @@ impl<'a> Queue<'a> {
     }
 
     /// Set size of the window.
-    pub fn resize(&mut self, width: u32, height: u32) {
-        *self.physical_width = width;
-        *self.physical_height = height;
+    pub fn resize(&mut self, physical_size: PhySize) {
+        *self.physical_size = physical_size;
     }
 
     /// Close the window.
@@ -95,8 +92,7 @@ where
 
     clipboard_ctx: Option<copypasta::ClipboardContext>,
 
-    physical_width: u32,
-    physical_height: u32,
+    physical_size: PhySize,
     scale_policy: WindowScalePolicy,
     pixels_per_point: f32,
     points_per_pixel: f32,
@@ -161,19 +157,14 @@ where
         };
         let _ = egui_input.viewports.insert(viewport_id, viewport_info);
 
-        let mut physical_width =
-            (open_settings.logical_width * pixels_per_point as f64).round() as u32;
-        let mut physical_height =
-            (open_settings.logical_height * pixels_per_point as f64).round() as u32;
+        let mut physical_size = PhySize {
+            width: (open_settings.logical_width * pixels_per_point as f64).round() as u32,
+            height: (open_settings.logical_height * pixels_per_point as f64).round() as u32,
+        };
 
         let mut bg_color = Rgba::BLACK;
         let mut close_requested = false;
-        let mut queue = Queue::new(
-            &mut bg_color,
-            &mut close_requested,
-            &mut physical_width,
-            &mut physical_height,
-        );
+        let mut queue = Queue::new(&mut bg_color, &mut close_requested, &mut physical_size);
         (build)(&egui_ctx, &mut queue, &mut state);
 
         let clipboard_ctx = match copypasta::ClipboardContext::new() {
@@ -201,8 +192,7 @@ where
 
             clipboard_ctx,
 
-            physical_width,
-            physical_height,
+            physical_size,
             pixels_per_point,
             points_per_pixel,
             scale_policy: open_settings.scale_policy,
@@ -299,8 +289,7 @@ where
 
         self.egui_input.time = Some(self.start_time.elapsed().as_secs_f64());
         self.egui_input.screen_rect = Some(calculate_screen_rect(
-            self.physical_width,
-            self.physical_height,
+            self.physical_size,
             self.points_per_pixel,
         ));
 
@@ -310,8 +299,7 @@ where
         let mut queue = Queue::new(
             &mut self.bg_color,
             &mut self.close_requested,
-            &mut self.physical_width,
-            &mut self.physical_height,
+            &mut self.physical_size,
         );
 
         (self.user_update)(&self.egui_ctx, &mut queue, state);
@@ -354,8 +342,7 @@ where
             self.renderer.render(
                 window,
                 self.bg_color,
-                self.physical_width,
-                self.physical_height,
+                self.physical_size,
                 self.pixels_per_point,
                 &mut self.egui_ctx,
                 &mut self.full_output.shapes,
@@ -549,14 +536,10 @@ where
                     } as f32;
                     self.points_per_pixel = self.pixels_per_point.recip();
 
-                    self.physical_width = window_info.physical_size().width;
-                    self.physical_height = window_info.physical_size().height;
+                    self.physical_size = window_info.physical_size();
 
-                    let screen_rect = calculate_screen_rect(
-                        self.physical_width,
-                        self.physical_height,
-                        self.points_per_pixel,
-                    );
+                    let screen_rect =
+                        calculate_screen_rect(self.physical_size, self.points_per_pixel);
 
                     self.egui_input.screen_rect = Some(screen_rect);
 
@@ -621,10 +604,10 @@ fn is_paste_command(modifiers: egui::Modifiers, keycode: keyboard_types::Code) -
 }
 
 /// Calculate screen rectangle in logical size.
-fn calculate_screen_rect(physical_width: u32, physical_height: u32, points_per_pixel: f32) -> Rect {
+fn calculate_screen_rect(physical_size: PhySize, points_per_pixel: f32) -> Rect {
     let logical_size = (
-        physical_width as f32 * points_per_pixel,
-        physical_height as f32 * points_per_pixel,
+        physical_size.width as f32 * points_per_pixel,
+        physical_size.height as f32 * points_per_pixel,
     );
     Rect::from_min_size(Pos2::new(0f32, 0f32), vec2(logical_size.0, logical_size.1))
 }

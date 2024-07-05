@@ -1,4 +1,4 @@
-use baseview::Window;
+use baseview::{PhySize, Window};
 use egui_glow::Painter;
 use std::sync::Arc;
 
@@ -44,8 +44,7 @@ impl Renderer {
         &mut self,
         window: &Window,
         bg_color: egui::Rgba,
-        canvas_width: u32,
-        canvas_height: u32,
+        canvas_size: PhySize,
         pixels_per_point: f32,
         egui_ctx: &mut egui::Context,
         shapes: &mut Vec<egui::epaint::ClippedShape>,
@@ -73,7 +72,7 @@ impl Renderer {
         }
 
         let clipped_primitives = egui_ctx.tessellate(shapes, pixels_per_point);
-        let dimensions: [u32; 2] = [canvas_width, canvas_height];
+        let dimensions: [u32; 2] = [canvas_size.width, canvas_size.height];
 
         self.painter
             .paint_primitives(dimensions, pixels_per_point, &clipped_primitives);
