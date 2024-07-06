@@ -77,8 +77,8 @@ impl Renderer {
                         NonZeroU32::new(handle.window).unwrap(),
                     ))
                 }
-                // will this work? i have no idea!
                 raw_window_handle::RawWindowHandle::Win32(handle) => {
+                    // will this work? i have no idea!
                     let mut raw_handle =
                         Win32WindowHandle::new(NonZeroIsize::new(handle.hwnd as isize).unwrap());
 
@@ -188,6 +188,7 @@ impl Renderer {
             width: canvas_width,
             height: canvas_height,
         } = physical_size;
+
         let shapes = std::mem::take(&mut full_output.shapes);
 
         let clipped_primitives = egui_ctx.tessellate(shapes, pixels_per_point);

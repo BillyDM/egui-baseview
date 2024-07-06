@@ -55,6 +55,7 @@ impl Renderer {
             width: canvas_width,
             height: canvas_height,
         } = physical_size;
+
         let shapes = std::mem::take(&mut full_output.shapes);
         let textures_delta = &mut full_output.textures_delta;
 

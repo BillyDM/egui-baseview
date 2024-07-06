@@ -432,9 +432,10 @@ where
                         baseview::ScrollDelta::Lines { x, y } => {
                             (egui::MouseWheelUnit::Line, egui::vec2(*x, *y))
                         }
+
                         baseview::ScrollDelta::Pixels { x, y } => (
                             egui::MouseWheelUnit::Point,
-                            egui::vec2(*x * self.points_per_pixel, *y * self.points_per_pixel),
+                            egui::vec2(*x, *y) * self.points_per_pixel,
                         ),
                     };
 
