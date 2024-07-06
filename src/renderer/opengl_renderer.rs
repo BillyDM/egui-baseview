@@ -1,4 +1,4 @@
-use baseview::Window;
+use baseview::{PhySize, Window};
 use egui::FullOutput;
 use egui_glow::Painter;
 use std::sync::Arc;
@@ -46,12 +46,15 @@ impl Renderer {
         &mut self,
         window: &Window,
         bg_color: egui::Rgba,
-        dimensions: (u32, u32),
+        physical_size: PhySize,
         pixels_per_point: f32,
         egui_ctx: &mut egui::Context,
         full_output: &mut FullOutput,
     ) {
-        let (canvas_width, canvas_height) = dimensions;
+        let PhySize {
+            width: canvas_width,
+            height: canvas_height,
+        } = physical_size;
         let shapes = std::mem::take(&mut full_output.shapes);
         let textures_delta = &mut full_output.textures_delta;
 
@@ -74,7 +77,7 @@ impl Renderer {
         }
 
         let clipped_primitives = egui_ctx.tessellate(shapes, pixels_per_point);
-        let dimensions: [u32; 2] = [canvas_size.width, canvas_size.height];
+        let dimensions: [u32; 2] = [canvas_width, canvas_height];
 
         self.painter
             .paint_primitives(dimensions, pixels_per_point, &clipped_primitives);

@@ -642,7 +642,6 @@ fn lerp_color_gamma(left: Color32, right: Color32, t: f32) -> Color32 {
     )
 }
 
-
 fn main() {
     let settings = WindowOpenOptions {
         title: String::from("egui-baseview hello world"),
@@ -663,9 +662,11 @@ fn main() {
                 ui.label("uwu");
             });
 
-            egui::Window::new("rendering test").scroll2(true).show(egui_ctx, |ui| {
-                state.ui(ui);
-            });
+            egui::Window::new("rendering test")
+                .scroll(true)
+                .show(egui_ctx, |ui| {
+                    state.ui(ui);
+                });
         },
     );
 }

@@ -341,7 +341,7 @@ where
             self.renderer.render(
                 window,
                 self.bg_color,
-                (self.physical_width, self.physical_height),
+                self.physical_size,
                 self.pixels_per_point,
                 &mut self.egui_ctx,
                 &mut full_output,

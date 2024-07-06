@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use baseview::Window;
+use baseview::{PhySize, Window};
 use egui::FullOutput;
 use egui_wgpu::{
     wgpu::{
@@ -79,11 +79,14 @@ impl Renderer {
                 }
                 // will this work? i have no idea!
                 raw_window_handle::RawWindowHandle::Win32(handle) => {
-                    let mut raw_handle = Win32WindowHandle::new(NonZeroIsize::new(handle.hwnd as isize).unwrap());
+                    let mut raw_handle =
+                        Win32WindowHandle::new(NonZeroIsize::new(handle.hwnd as isize).unwrap());
 
-                    raw_handle.hinstance = handle.hinstance.is_null().then(|| { NonZeroIsize::new(handle.hinstance as isize).unwrap() });
+                    raw_handle.hinstance = handle
+                        .hinstance
+                        .is_null()
+                        .then(|| NonZeroIsize::new(handle.hinstance as isize).unwrap());
 
-                    
                     raw_window_handle_06::RawWindowHandle::Win32(raw_handle)
                 }
                 _ => todo!(),
@@ -93,26 +96,22 @@ impl Renderer {
         let surface = unsafe { instance.create_surface_unsafe(target) }.unwrap();
         let configuration = WgpuConfiguration::default();
 
-        let state = Arc::new(
-            pollster::block_on(RenderState::create(
-                &configuration,
-                &instance,
-                &surface,
-                None,
-                MSAA_SAMPLES,
-            ))?,
-        );
+        let state = Arc::new(pollster::block_on(RenderState::create(
+            &configuration,
+            &instance,
+            &surface,
+            None,
+            MSAA_SAMPLES,
+        ))?);
 
-        Ok(
-            Self {
-                render_state: state,
-                surface,
-                configuration,
-                msaa_texture_view: None,
-                width: 0,
-                height: 0,
-            }
-        )
+        Ok(Self {
+            render_state: state,
+            surface,
+            configuration,
+            msaa_texture_view: None,
+            width: 0,
+            height: 0,
+        })
     }
 
     pub fn max_texture_side(&self) -> usize {
@@ -180,12 +179,15 @@ impl Renderer {
     pub fn render(
         &mut self,
         bg_color: egui::Rgba,
-        dimensions: (u32, u32),
+        physical_size: PhySize,
         pixels_per_point: f32,
         egui_ctx: &mut egui::Context,
-        full_output: &mut FullOutput
+        full_output: &mut FullOutput,
     ) {
-        let (canvas_width, canvas_height) = dimensions;
+        let PhySize {
+            width: canvas_width,
+            height: canvas_height,
+        } = physical_size;
         let shapes = std::mem::take(&mut full_output.shapes);
 
         let clipped_primitives = egui_ctx.tessellate(shapes, pixels_per_point);

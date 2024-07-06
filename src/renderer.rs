@@ -1,4 +1,4 @@
-use baseview::Window;
+use baseview::{PhySize, Window};
 use egui::FullOutput;
 
 #[cfg(feature = "opengl")]
@@ -11,24 +11,41 @@ pub(crate) enum Renderer {
     #[cfg(feature = "opengl")]
     OpenGL(opengl_renderer::Renderer),
     #[cfg(feature = "wgpu")]
-    Wgpu(wgpu_renderer::Renderer)
+    Wgpu(wgpu_renderer::Renderer),
 }
 
 impl Renderer {
-    pub(crate) fn render(&mut self, _window: &Window, bg_color: egui::Rgba,
-        dimensions: (u32, u32),
+    pub(crate) fn render(
+        &mut self,
+        _window: &Window,
+        bg_color: egui::Rgba,
+        physical_size: PhySize,
         pixels_per_point: f32,
         egui_ctx: &mut egui::Context,
-        full_output: &mut FullOutput) {
-            match self {
-                #[cfg(feature = "opengl")]
-                Renderer::OpenGL(renderer) => renderer.render(_window, bg_color, dimensions, pixels_per_point, egui_ctx, full_output),
-                #[cfg(feature = "wgpu")]
-                Renderer::Wgpu(renderer) => renderer.render(bg_color, dimensions, pixels_per_point, egui_ctx, full_output),
-                #[allow(unreachable_patterns)]
-                _ => unreachable!()
-            }
+        full_output: &mut FullOutput,
+    ) {
+        match self {
+            #[cfg(feature = "opengl")]
+            Renderer::OpenGL(renderer) => renderer.render(
+                _window,
+                bg_color,
+                physical_size,
+                pixels_per_point,
+                egui_ctx,
+                full_output,
+            ),
+            #[cfg(feature = "wgpu")]
+            Renderer::Wgpu(renderer) => renderer.render(
+                bg_color,
+                physical_size,
+                pixels_per_point,
+                egui_ctx,
+                full_output,
+            ),
+            #[allow(unreachable_patterns)]
+            _ => unreachable!(),
         }
+    }
 
     pub(crate) fn max_texture_side(&self) -> usize {
         match self {
@@ -37,7 +54,7 @@ impl Renderer {
             #[cfg(feature = "wgpu")]
             Renderer::Wgpu(renderer) => renderer.max_texture_side(),
             #[allow(unreachable_patterns)]
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }
@@ -46,14 +63,17 @@ impl Renderer {
 #[allow(unreachable_code)]
 pub(crate) fn get_renderer(window: &Window) -> Renderer {
     #[cfg(not(any(feature = "opengl", feature = "wgpu")))]
-    compile_error!("No renderer present. Please enable either opengl or wgpu in the crate's features");
+    compile_error!(
+        "No renderer present. Please enable either opengl or wgpu in the crate's features"
+    );
 
     #[cfg(all(feature = "wgpu", feature = "opengl"))]
     compile_error!("Both renderers enabled, which is unnesecarry. Either use just wgpu, or opengl");
 
     #[cfg(feature = "wgpu")]
     {
-        let renderer = wgpu_renderer::Renderer::new(window).expect("wgpu backend failed to initalize");
+        let renderer =
+            wgpu_renderer::Renderer::new(window).expect("wgpu backend failed to initalize");
         return Renderer::Wgpu(renderer);
     }
 
