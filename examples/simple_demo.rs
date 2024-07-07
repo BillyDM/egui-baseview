@@ -15,6 +15,8 @@ fn main() {
 
     EguiWindow::open_blocking(
         settings,
+        #[cfg(feature = "wgpu")]
+        egui_baseview::WgpuConfiguration::default(),
         state,
         // Called once before the first frame. Allows you to do setup code and to
         // call `ctx.set_fonts()`. Optional.

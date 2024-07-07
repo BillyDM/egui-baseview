@@ -15,6 +15,8 @@ fn main() {
 
     EguiWindow::open_blocking(
         settings,
+        #[cfg(feature = "wgpu")]
+        egui_baseview::WgpuConfiguration::default(),
         state,
         |_egui_ctx: &Context, _queue: &mut Queue, _state: &mut ()| {},
         |egui_ctx: &Context, _queue: &mut Queue, _state: &mut ()| {

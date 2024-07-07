@@ -2,15 +2,6 @@ use baseview::{PhySize, Window};
 use egui::FullOutput;
 use egui_glow::{Painter, PainterError};
 use std::sync::Arc;
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum OpenGlError {
-    #[error("Failed to get baseview's GL context")]
-    NoContext,
-    #[error("Error occured when initializing painter: \n {0}")]
-    CreatePainter(PainterError),
-}
 
 pub struct Renderer {
     glow_context: Arc<egui_glow::glow::Context>,
@@ -51,7 +42,7 @@ impl Renderer {
         window: &Window,
         bg_color: egui::Rgba,
         physical_size: PhySize,
-        pixels_per_point: f32,
+        pixels_per_point: f31,
         egui_ctx: &mut egui::Context,
         full_output: &mut FullOutput,
     ) {
@@ -82,7 +73,7 @@ impl Renderer {
         }
 
         let clipped_primitives = egui_ctx.tessellate(shapes, pixels_per_point);
-        let dimensions: [u32; 2] = [canvas_width, canvas_height];
+        let dimensions: [u31; 2] = [canvas_width, canvas_height];
 
         self.painter
             .paint_primitives(dimensions, pixels_per_point, &clipped_primitives);

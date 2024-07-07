@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use baseview::{
     Event, EventStatus, PhySize, Window, WindowHandle, WindowHandler, WindowOpenOptions,
     WindowScalePolicy,
@@ -6,8 +8,9 @@ use copypasta::ClipboardProvider;
 use egui::{pos2, vec2, Pos2, Rect, Rgba, ViewportCommand};
 use keyboard_types::Modifiers;
 use raw_window_handle::HasRawWindowHandle;
-use std::time::Instant;
 
+#[cfg(feature = "wgpu")]
+use crate::renderer;
 use crate::renderer::Renderer;
 
 pub struct Queue<'a> {
@@ -110,6 +113,7 @@ where
     fn new<B>(
         window: &mut baseview::Window<'_>,
         open_settings: OpenSettings,
+        #[cfg(feature = "wgpu")] wgpu_configuration: renderer::WgpuConfiguration,
         mut build: B,
         update: U,
         mut state: State,
@@ -118,7 +122,12 @@ where
         B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
-        let renderer = Renderer::new(window).unwrap_or_else(|err| {
+        let renderer = Renderer::new(
+            window,
+            #[cfg(feature = "wgpu")]
+            wgpu_configuration.into(),
+        )
+        .unwrap_or_else(|err| {
             // TODO: better error log and not panicking, but that's gonna require baseview changes
             log::error!("oops! the gpu backend couldn't initialize! \n {err}");
             panic!()
@@ -214,6 +223,7 @@ where
     pub fn open_parented<P, B>(
         parent: &P,
         #[allow(unused_mut)] mut settings: WindowOpenOptions,
+        #[cfg(feature = "wgpu")] wgpu_configuration: renderer::WgpuConfiguration,
         state: State,
         build: B,
         update: U,
@@ -234,7 +244,15 @@ where
             parent,
             settings,
             move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
-                EguiWindow::new(window, open_settings, build, update, state)
+                EguiWindow::new(
+                    window,
+                    open_settings,
+                    #[cfg(feature = "wgpu")]
+                    wgpu_configuration,
+                    build,
+                    update,
+                    state,
+                )
             },
         )
     }
@@ -249,6 +267,7 @@ where
     /// application and build the UI.
     pub fn open_blocking<B>(
         #[allow(unused_mut)] mut settings: WindowOpenOptions,
+        #[cfg(feature = "wgpu")] wgpu_configuration: renderer::WgpuConfiguration,
         state: State,
         build: B,
         update: U,
@@ -266,7 +285,15 @@ where
         Window::open_blocking(
             settings,
             move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
-                EguiWindow::new(window, open_settings, build, update, state)
+                EguiWindow::new(
+                    window,
+                    open_settings,
+                    #[cfg(feature = "wgpu")]
+                    wgpu_configuration,
+                    build,
+                    update,
+                    state,
+                )
             },
         )
     }
