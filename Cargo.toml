@@ -14,7 +14,7 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["wgpu", "default_fonts"]
+default = ["opengl", "default_fonts"]
 default_fonts = ["egui/default_fonts"]
 opengl = ["dep:egui_glow", "baseview/opengl"]
 wgpu = ["dep:egui-wgpu", "dep:raw-window-handle-06", "dep:pollster", "dep:wgpu"]
