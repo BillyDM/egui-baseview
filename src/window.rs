@@ -130,7 +130,7 @@ where
         .unwrap_or_else(|err| {
             // TODO: better error log and not panicking, but that's gonna require baseview changes
             log::error!("oops! the gpu backend couldn't initialize! \n {err}");
-            panic!()
+            panic!("gpu backend failed to initialize: \n {err}")
         });
         let egui_ctx = egui::Context::default();
 
