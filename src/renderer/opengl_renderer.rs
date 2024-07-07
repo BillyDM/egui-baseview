@@ -1,7 +1,16 @@
 use baseview::{PhySize, Window};
 use egui::FullOutput;
-use egui_glow::Painter;
+use egui_glow::{Painter, PainterError};
 use std::sync::Arc;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum OpenGlError {
+    #[error("Failed to get baseview's GL context")]
+    NoContext,
+    #[error("Error occured when initializing painter: \n {0}")]
+    CreatePainter(PainterError),
+}
 
 pub struct Renderer {
     glow_context: Arc<egui_glow::glow::Context>,
@@ -9,10 +18,8 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(window: &Window) -> Self {
-        let context = window
-            .gl_context()
-            .expect("failed to get baseview gl context");
+    pub fn new(window: &Window) -> Result<Self, OpenGlError> {
+        let context = window.gl_context().ok_or(OpenGlError::NoContext)?;
         unsafe {
             context.make_current();
         }
@@ -23,19 +30,16 @@ impl Renderer {
         });
 
         let painter = egui_glow::Painter::new(Arc::clone(&glow_context), "", None)
-            .map_err(|error| {
-                log::error!("Error occurred in initializing painter:\n{}", error);
-            })
-            .unwrap();
+            .map_err(OpenGlError::CreatePainter)?;
 
         unsafe {
             context.make_not_current();
         }
 
-        Self {
+        Ok(Self {
             glow_context,
             painter,
-        }
+        })
     }
 
     pub fn max_texture_side(&self) -> usize {

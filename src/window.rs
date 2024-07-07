@@ -8,7 +8,7 @@ use keyboard_types::Modifiers;
 use raw_window_handle::HasRawWindowHandle;
 use std::time::Instant;
 
-use crate::renderer::{get_renderer, Renderer};
+use crate::renderer::Renderer;
 
 pub struct Queue<'a> {
     bg_color: &'a mut Rgba,
@@ -118,7 +118,11 @@ where
         B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
-        let renderer = get_renderer(window);
+        let renderer = Renderer::new(window).unwrap_or_else(|err| {
+            // TODO: better error log and not panicking, but that's gonna require baseview changes
+            log::error!("oops! the gpu backend couldn't initialize! \n {err}");
+            panic!()
+        });
         let egui_ctx = egui::Context::default();
 
         // Assume scale for now until there is an event with a new one.
@@ -339,6 +343,7 @@ where
 
         if do_repaint_now {
             self.renderer.render(
+                #[cfg(feature = "opengl")]
                 window,
                 self.bg_color,
                 self.physical_size,
