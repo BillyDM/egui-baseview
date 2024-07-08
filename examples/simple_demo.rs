@@ -7,6 +7,7 @@ fn main() {
         title: String::from("egui-baseview simple demo"),
         size: Size::new(400.0, 200.0),
         scale: WindowScalePolicy::SystemScaleFactor,
+        #[cfg(feature = "opengl")]
         gl_config: Some(Default::default()),
     };
 
@@ -14,6 +15,8 @@ fn main() {
 
     EguiWindow::open_blocking(
         settings,
+        #[cfg(feature = "wgpu")]
+        egui_baseview::WgpuConfiguration::default(),
         state,
         // Called once before the first frame. Allows you to do setup code and to
         // call `ctx.set_fonts()`. Optional.
@@ -21,7 +24,7 @@ fn main() {
         // Called before each frame. Here you should update the state of your
         // application and build the UI.
         |egui_ctx: &Context, queue: &mut Queue, state: &mut State| {
-            egui::Window::new("egui-baseview simple demo").show(&egui_ctx, |ui| {
+            egui::Window::new("egui-baseview simple demo").show(egui_ctx, |ui| {
                 ui.heading("My Egui Application");
                 ui.horizontal(|ui| {
                     ui.label("Your name: ");

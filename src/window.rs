@@ -1,13 +1,16 @@
+use std::time::Instant;
+
 use baseview::{
     Event, EventStatus, PhySize, Window, WindowHandle, WindowHandler, WindowOpenOptions,
     WindowScalePolicy,
 };
 use copypasta::ClipboardProvider;
-use egui::{pos2, vec2, FullOutput, Pos2, Rect, Rgba, ViewportCommand};
+use egui::{pos2, vec2, Pos2, Rect, Rgba, ViewportCommand};
 use keyboard_types::Modifiers;
 use raw_window_handle::HasRawWindowHandle;
-use std::time::Instant;
 
+#[cfg(feature = "wgpu")]
+use crate::renderer;
 use crate::renderer::Renderer;
 
 pub struct Queue<'a> {
@@ -64,8 +67,8 @@ impl OpenSettings {
 
         Self {
             scale_policy,
-            logical_width: settings.size.width as f64,
-            logical_height: settings.size.height as f64,
+            logical_width: settings.size.width,
+            logical_height: settings.size.height,
             title: settings.title.clone(),
         }
     }
@@ -99,8 +102,6 @@ where
     bg_color: Rgba,
     close_requested: bool,
     repaint_after: Option<Instant>,
-
-    full_output: egui::FullOutput,
 }
 
 impl<State, U> EguiWindow<State, U>
@@ -112,6 +113,7 @@ where
     fn new<B>(
         window: &mut baseview::Window<'_>,
         open_settings: OpenSettings,
+        #[cfg(feature = "wgpu")] wgpu_configuration: renderer::WgpuConfiguration,
         mut build: B,
         update: U,
         mut state: State,
@@ -120,7 +122,16 @@ where
         B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
-        let renderer = Renderer::new(window);
+        let renderer = Renderer::new(
+            window,
+            #[cfg(feature = "wgpu")]
+            wgpu_configuration.into(),
+        )
+        .unwrap_or_else(|err| {
+            // TODO: better error log and not panicking, but that's gonna require baseview changes
+            log::error!("oops! the gpu backend couldn't initialize! \n {err}");
+            panic!("gpu backend failed to initialize: \n {err}")
+        });
         let egui_ctx = egui::Context::default();
 
         // Assume scale for now until there is an event with a new one.
@@ -197,8 +208,6 @@ where
             bg_color,
             close_requested,
             repaint_after: Some(start_time),
-
-            full_output: FullOutput::default(),
         }
     }
 
@@ -213,7 +222,8 @@ where
     /// application and build the UI.
     pub fn open_parented<P, B>(
         parent: &P,
-        mut settings: WindowOpenOptions,
+        #[allow(unused_mut)] mut settings: WindowOpenOptions,
+        #[cfg(feature = "wgpu")] wgpu_configuration: renderer::WgpuConfiguration,
         state: State,
         build: B,
         update: U,
@@ -223,6 +233,7 @@ where
         B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
+        #[cfg(feature = "opengl")]
         if settings.gl_config.is_none() {
             settings.gl_config = Some(Default::default());
         }
@@ -233,7 +244,15 @@ where
             parent,
             settings,
             move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
-                EguiWindow::new(window, open_settings, build, update, state)
+                EguiWindow::new(
+                    window,
+                    open_settings,
+                    #[cfg(feature = "wgpu")]
+                    wgpu_configuration,
+                    build,
+                    update,
+                    state,
+                )
             },
         )
     }
@@ -246,11 +265,17 @@ where
     /// call `ctx.set_fonts()`. Optional.
     /// * `update` - Called before each frame. Here you should update the state of your
     /// application and build the UI.
-    pub fn open_blocking<B>(mut settings: WindowOpenOptions, state: State, build: B, update: U)
-    where
+    pub fn open_blocking<B>(
+        #[allow(unused_mut)] mut settings: WindowOpenOptions,
+        #[cfg(feature = "wgpu")] wgpu_configuration: renderer::WgpuConfiguration,
+        state: State,
+        build: B,
+        update: U,
+    ) where
         B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
+        #[cfg(feature = "opengl")]
         if settings.gl_config.is_none() {
             settings.gl_config = Some(Default::default());
         }
@@ -260,7 +285,15 @@ where
         Window::open_blocking(
             settings,
             move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
-                EguiWindow::new(window, open_settings, build, update, state)
+                EguiWindow::new(
+                    window,
+                    open_settings,
+                    #[cfg(feature = "wgpu")]
+                    wgpu_configuration,
+                    build,
+                    update,
+                    state,
+                )
             },
         )
     }
@@ -307,9 +340,9 @@ where
 
         // Prevent data from being allocated every frame by storing this
         // in a member field.
-        self.full_output = self.egui_ctx.end_frame();
+        let mut full_output = self.egui_ctx.end_frame();
 
-        let Some(viewport_output) = self.full_output.viewport_output.get(&self.viewport_id) else {
+        let Some(viewport_output) = full_output.viewport_output.get(&self.viewport_id) else {
             // The main window was closed by egui.
             window.close();
             return;
@@ -337,13 +370,13 @@ where
 
         if do_repaint_now {
             self.renderer.render(
+                #[cfg(feature = "opengl")]
                 window,
                 self.bg_color,
                 self.physical_size,
                 self.pixels_per_point,
                 &mut self.egui_ctx,
-                &mut self.full_output.shapes,
-                &mut self.full_output.textures_delta,
+                &mut full_output,
             );
 
             self.repaint_after = None;
@@ -352,25 +385,24 @@ where
             self.repaint_after = Some(repaint_after);
         }
 
-        if !self.full_output.platform_output.copied_text.is_empty() {
+        if !full_output.platform_output.copied_text.is_empty() {
             if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
                 if let Err(err) =
-                    clipboard_ctx.set_contents(self.full_output.platform_output.copied_text.clone())
+                    clipboard_ctx.set_contents(full_output.platform_output.copied_text.clone())
                 {
                     log::error!("Copy/Cut error: {}", err);
                 }
             }
-            self.full_output.platform_output.copied_text.clear();
         }
 
-        if let Some(open_url) = &self.full_output.platform_output.open_url {
+        if let Some(open_url) = &full_output.platform_output.open_url {
             if let Err(err) = open::that_detached(&open_url.url) {
                 log::error!("Open error: {}", err);
             }
         }
 
         let cursor_icon =
-            crate::translate::translate_cursor_icon(self.full_output.platform_output.cursor_icon);
+            crate::translate::translate_cursor_icon(full_output.platform_output.cursor_icon);
         if self.current_cursor_icon != cursor_icon {
             self.current_cursor_icon = cursor_icon;
 
@@ -432,9 +464,10 @@ where
                         baseview::ScrollDelta::Lines { x, y } => {
                             (egui::MouseWheelUnit::Line, egui::vec2(*x, *y))
                         }
+
                         baseview::ScrollDelta::Pixels { x, y } => (
                             egui::MouseWheelUnit::Point,
-                            egui::vec2(*x * self.points_per_pixel, *y * self.points_per_pixel),
+                            egui::vec2(*x, *y) * self.points_per_pixel,
                         ),
                     };
 
@@ -480,7 +513,7 @@ where
                             self.egui_input.modifiers.mac_cmd = pressed;
                             self.egui_input.modifiers.command = pressed;
                         }
-                        () // prevent `rustfmt` from breaking this
+                        // prevent `rustfmt` from breaking this
                     }
                     _ => (),
                 }
@@ -544,7 +577,7 @@ where
                         .viewports
                         .get_mut(&self.viewport_id)
                         .unwrap();
-                    viewport_info.native_pixels_per_point = Some(self.pixels_per_point as f32);
+                    viewport_info.native_pixels_per_point = Some(self.pixels_per_point);
                     viewport_info.inner_rect = Some(screen_rect);
 
                     // Schedule to repaint on the next frame.
