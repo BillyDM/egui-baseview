@@ -29,7 +29,7 @@ egui_glow = { version = "0.28", optional = true }
 egui-wgpu = { version = "0.28", optional = true }
 wgpu = { version = "0.20", optional = true }
 keyboard-types = { version = "0.6", default-features = false }
-baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "45465c5f46abed6c6ce370fffde5edc8e4cd5aa3" }
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "579130ecb4f9f315ae52190af42f0ea46aeaa4a2" }
 raw-window-handle = "0.5"
 raw-window-handle-06 = { package = "raw-window-handle", version = "0.6", optional = true }
 # TODO: Enable wayland feature when baseview gets wayland support.

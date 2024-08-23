@@ -406,8 +406,8 @@ where
         if self.current_cursor_icon != cursor_icon {
             self.current_cursor_icon = cursor_icon;
 
-            // TODO: Set mouse cursor for other platforms once baseview supports it.
-            #[cfg(target_os = "linux")]
+            // TODO: Set mouse cursor for MacOS once baseview supports it.
+            #[cfg(not(target_os = "macos"))]
             window.set_mouse_cursor(cursor_icon);
         }
     }
