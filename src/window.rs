@@ -410,6 +410,20 @@ where
             #[cfg(not(target_os = "macos"))]
             window.set_mouse_cursor(cursor_icon);
         }
+
+        // A temporary workaround for keyboard input not working sometimes in Windows.
+        // See https://github.com/BillyDM/egui-baseview/issues/20
+        #[cfg(feature = "windows_keyboard_workaround")]
+        {
+            #[cfg(target_os = "windows")]
+            {
+                if !full_output.platform_output.events.is_empty()
+                    || full_output.platform_output.ime.is_some()
+                {
+                    window.focus();
+                }
+            }
+        }
     }
 
     fn on_event(&mut self, _window: &mut Window, event: Event) -> EventStatus {

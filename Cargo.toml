@@ -22,6 +22,9 @@ wgpu = ["dep:egui-wgpu", "dep:raw-window-handle-06", "dep:pollster", "dep:wgpu"]
 ##
 ## This can help performance for graphics-intense applications.
 rayon = ["egui/rayon"]
+## Enables a temporary workaround for keyboard input not working sometimes in Windows.
+## See https://github.com/BillyDM/egui-baseview/issues/20
+windows_keyboard_workaround = []
 
 [dependencies]
 egui = { version = "0.28", default-features = false, features = ["bytemuck"] }
