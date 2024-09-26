@@ -1,6 +1,6 @@
 use baseview::{Size, WindowOpenOptions, WindowScalePolicy};
 use egui::Context;
-use egui_baseview::{EguiWindow, Queue};
+use egui_baseview::{EguiWindow, GraphicsConfig, Queue};
 
 fn main() {
     let settings = WindowOpenOptions {
@@ -15,8 +15,7 @@ fn main() {
 
     EguiWindow::open_blocking(
         settings,
-        #[cfg(feature = "wgpu")]
-        egui_baseview::WgpuConfiguration::default(),
+        GraphicsConfig::default(),
         state,
         // Called once before the first frame. Allows you to do setup code and to
         // call `ctx.set_fonts()`. Optional.

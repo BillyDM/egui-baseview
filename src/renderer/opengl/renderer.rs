@@ -5,13 +5,40 @@ use std::sync::Arc;
 
 use super::OpenGlError;
 
+#[derive(Debug, Clone)]
+pub struct GraphicsConfig {
+    /// Controls whether to apply dithering to minimize banding artifacts.
+    ///
+    /// Dithering assumes an sRGB output and thus will apply noise to any input value that lies between
+    /// two 8bit values after applying the sRGB OETF function, i.e. if it's not a whole 8bit value in "gamma space".
+    /// This means that only inputs from texture interpolation and vertex colors should be affected in practice.
+    ///
+    /// Defaults to true.
+    pub dithering: bool,
+
+    /// Needed for cross compiling for VirtualBox VMSVGA driver with OpenGL ES 2.0 and OpenGL 2.1 which doesn't support SRGB texture.
+    /// See <https://github.com/emilk/egui/pull/1993>.
+    ///
+    /// For OpenGL ES 2.0: set this to [`egui_glow::ShaderVersion::Es100`] to solve blank texture problem (by using the "fallback shader").
+    pub shader_version: Option<egui_glow::ShaderVersion>,
+}
+
+impl Default for GraphicsConfig {
+    fn default() -> Self {
+        Self {
+            shader_version: None,
+            dithering: true,
+        }
+    }
+}
+
 pub struct Renderer {
     glow_context: Arc<egui_glow::glow::Context>,
     painter: Painter,
 }
 
 impl Renderer {
-    pub fn new(window: &Window) -> Result<Self, OpenGlError> {
+    pub fn new(window: &Window, config: GraphicsConfig) -> Result<Self, OpenGlError> {
         let context = window.gl_context().ok_or(OpenGlError::NoContext)?;
         unsafe {
             context.make_current();
@@ -22,8 +49,13 @@ impl Renderer {
             egui_glow::glow::Context::from_loader_function(|s| context.get_proc_address(s))
         });
 
-        let painter = egui_glow::Painter::new(Arc::clone(&glow_context), "", None)
-            .map_err(OpenGlError::CreatePainter)?;
+        let painter = egui_glow::Painter::new(
+            Arc::clone(&glow_context),
+            "",
+            config.shader_version,
+            config.dithering,
+        )
+        .map_err(OpenGlError::CreatePainter)?;
 
         unsafe {
             context.make_not_current();

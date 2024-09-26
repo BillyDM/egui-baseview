@@ -9,9 +9,7 @@ use egui::{pos2, vec2, Pos2, Rect, Rgba, ViewportCommand};
 use keyboard_types::Modifiers;
 use raw_window_handle::HasRawWindowHandle;
 
-#[cfg(feature = "wgpu")]
-use crate::renderer;
-use crate::renderer::Renderer;
+use crate::{renderer::Renderer, GraphicsConfig};
 
 pub struct Queue<'a> {
     bg_color: &'a mut Rgba,
@@ -113,7 +111,7 @@ where
     fn new<B>(
         window: &mut baseview::Window<'_>,
         open_settings: OpenSettings,
-        #[cfg(feature = "wgpu")] wgpu_configuration: renderer::WgpuConfiguration,
+        graphics_config: GraphicsConfig,
         mut build: B,
         update: U,
         mut state: State,
@@ -122,12 +120,7 @@ where
         B: FnMut(&egui::Context, &mut Queue, &mut State),
         B: 'static + Send,
     {
-        let renderer = Renderer::new(
-            window,
-            #[cfg(feature = "wgpu")]
-            wgpu_configuration.into(),
-        )
-        .unwrap_or_else(|err| {
+        let renderer = Renderer::new(window, graphics_config).unwrap_or_else(|err| {
             // TODO: better error log and not panicking, but that's gonna require baseview changes
             log::error!("oops! the gpu backend couldn't initialize! \n {err}");
             panic!("gpu backend failed to initialize: \n {err}")
@@ -223,7 +216,7 @@ where
     pub fn open_parented<P, B>(
         parent: &P,
         #[allow(unused_mut)] mut settings: WindowOpenOptions,
-        #[cfg(feature = "wgpu")] wgpu_configuration: renderer::WgpuConfiguration,
+        graphics_config: GraphicsConfig,
         state: State,
         build: B,
         update: U,
@@ -244,15 +237,7 @@ where
             parent,
             settings,
             move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
-                EguiWindow::new(
-                    window,
-                    open_settings,
-                    #[cfg(feature = "wgpu")]
-                    wgpu_configuration,
-                    build,
-                    update,
-                    state,
-                )
+                EguiWindow::new(window, open_settings, graphics_config, build, update, state)
             },
         )
     }
@@ -267,7 +252,7 @@ where
     /// application and build the UI.
     pub fn open_blocking<B>(
         #[allow(unused_mut)] mut settings: WindowOpenOptions,
-        #[cfg(feature = "wgpu")] wgpu_configuration: renderer::WgpuConfiguration,
+        graphics_config: GraphicsConfig,
         state: State,
         build: B,
         update: U,
@@ -285,15 +270,7 @@ where
         Window::open_blocking(
             settings,
             move |window: &mut baseview::Window<'_>| -> EguiWindow<State, U> {
-                EguiWindow::new(
-                    window,
-                    open_settings,
-                    #[cfg(feature = "wgpu")]
-                    wgpu_configuration,
-                    build,
-                    update,
-                    state,
-                )
+                EguiWindow::new(window, open_settings, graphics_config, build, update, state)
             },
         )
     }
@@ -323,7 +300,7 @@ where
             self.points_per_pixel,
         ));
 
-        self.egui_ctx.begin_frame(self.egui_input.take());
+        self.egui_ctx.begin_pass(self.egui_input.take());
 
         //let mut repaint_requested = false;
         let mut queue = Queue::new(
@@ -340,7 +317,7 @@ where
 
         // Prevent data from being allocated every frame by storing this
         // in a member field.
-        let mut full_output = self.egui_ctx.end_frame();
+        let mut full_output = self.egui_ctx.end_pass();
 
         let Some(viewport_output) = full_output.viewport_output.get(&self.viewport_id) else {
             // The main window was closed by egui.

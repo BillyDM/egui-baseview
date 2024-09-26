@@ -13,7 +13,7 @@ use egui_wgpu::{
         SurfaceTargetUnsafe, TextureDescriptor, TextureDimension, TextureUsages, TextureView,
         TextureViewDescriptor,
     },
-    RenderState, ScreenDescriptor, WgpuConfiguration, WgpuError,
+    RenderState, ScreenDescriptor, WgpuError,
 };
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use raw_window_handle_06::{
@@ -21,19 +21,45 @@ use raw_window_handle_06::{
     XcbDisplayHandle, XcbWindowHandle, XlibDisplayHandle, XlibWindowHandle,
 };
 
+pub use egui_wgpu::WgpuConfiguration;
+
+#[derive(Debug, Clone)]
+pub struct GraphicsConfig {
+    /// Controls whether to apply dithering to minimize banding artifacts.
+    ///
+    /// Dithering assumes an sRGB output and thus will apply noise to any input value that lies between
+    /// two 8bit values after applying the sRGB OETF function, i.e. if it's not a whole 8bit value in "gamma space".
+    /// This means that only inputs from texture interpolation and vertex colors should be affected in practice.
+    ///
+    /// Defaults to true.
+    pub dithering: bool,
+
+    /// Configures wgpu instance/device/adapter/surface creation and renderloop.
+    pub wgpu_options: WgpuConfiguration,
+}
+
+impl Default for GraphicsConfig {
+    fn default() -> Self {
+        Self {
+            dithering: true,
+            wgpu_options: Default::default(),
+        }
+    }
+}
+
 const MSAA_SAMPLES: u32 = 4;
 
 pub struct Renderer {
     render_state: Arc<RenderState>,
     surface: Surface<'static>,
-    configuration: WgpuConfiguration,
+    config: GraphicsConfig,
     msaa_texture_view: Option<TextureView>,
     width: u32,
     height: u32,
 }
 
 impl Renderer {
-    pub fn new(window: &Window, configuration: WgpuConfiguration) -> Result<Self, WgpuError> {
+    pub fn new(window: &Window, config: GraphicsConfig) -> Result<Self, WgpuError> {
         let instance = Instance::new(InstanceDescriptor::default());
 
         let raw_display_handle = window.raw_display_handle();
@@ -96,17 +122,18 @@ impl Renderer {
         let surface = unsafe { instance.create_surface_unsafe(target) }.unwrap();
 
         let state = Arc::new(pollster::block_on(RenderState::create(
-            &configuration,
+            &config.wgpu_options,
             &instance,
             &surface,
             None,
             MSAA_SAMPLES,
+            config.dithering,
         ))?);
 
         Ok(Self {
             render_state: state,
             surface,
-            configuration,
+            config,
             msaa_texture_view: None,
             width: 0,
             height: 0,
@@ -127,7 +154,7 @@ impl Renderer {
         let mut surf_config = SurfaceConfiguration {
             usage,
             format: self.render_state.target_format,
-            present_mode: self.configuration.present_mode,
+            present_mode: self.config.wgpu_options.present_mode,
             view_formats: vec![self.render_state.target_format],
             ..self
                 .surface
@@ -136,7 +163,7 @@ impl Renderer {
         };
 
         if let Some(desired_maximum_frame_latency) =
-            self.configuration.desired_maximum_frame_latency
+            self.config.wgpu_options.desired_maximum_frame_latency
         {
             surf_config.desired_maximum_frame_latency = desired_maximum_frame_latency;
         }
@@ -235,7 +262,7 @@ impl Renderer {
 
         let output_frame = match output_frame {
             Ok(frame) => frame,
-            Err(err) => match (self.configuration.on_surface_error)(err) {
+            Err(err) => match (self.config.wgpu_options.on_surface_error)(err) {
                 egui_wgpu::SurfaceErrorAction::SkipFrame => return,
                 egui_wgpu::SurfaceErrorAction::RecreateSurface => {
                     self.configure_surface(self.width, self.height);
@@ -250,7 +277,7 @@ impl Renderer {
                 .texture
                 .create_view(&TextureViewDescriptor::default());
 
-            let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+            let render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("egui_render"),
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: self.msaa_texture_view.as_ref().unwrap(),
@@ -270,7 +297,14 @@ impl Renderer {
                 occlusion_query_set: None,
             });
 
-            renderer.render(&mut render_pass, &clipped_primitives, &screen_descriptor);
+            // Forgetting the pass' lifetime means that we are no longer compile-time protected from
+            // runtime errors caused by accessing the parent encoder before the render pass is dropped.
+            // Since we don't pass it on to the renderer, we should be perfectly safe against this mistake here!
+            renderer.render(
+                &mut render_pass.forget_lifetime(),
+                &clipped_primitives,
+                &screen_descriptor,
+            );
         }
 
         {
