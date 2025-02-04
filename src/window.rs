@@ -362,19 +362,23 @@ where
             self.repaint_after = Some(repaint_after);
         }
 
-        if !full_output.platform_output.copied_text.is_empty() {
-            if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
-                if let Err(err) =
-                    clipboard_ctx.set_contents(full_output.platform_output.copied_text.clone())
-                {
-                    log::error!("Copy/Cut error: {}", err);
+        for command in full_output.platform_output.commands {
+            match command {
+                egui::OutputCommand::CopyText(text) => {
+                    if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
+                        if let Err(err) = clipboard_ctx.set_contents(text) {
+                            log::error!("Copy/Cut error: {}", err);
+                        }
+                    }
                 }
-            }
-        }
-
-        if let Some(open_url) = &full_output.platform_output.open_url {
-            if let Err(err) = open::that_detached(&open_url.url) {
-                log::error!("Open error: {}", err);
+                egui::OutputCommand::CopyImage(_) => {
+                    log::warn!("Copying images is not supported in egui_baseview.");
+                }
+                egui::OutputCommand::OpenUrl(open_url) => {
+                    if let Err(err) = open::that_detached(&open_url.url) {
+                        log::error!("Open error: {}", err);
+                    }
+                }
             }
         }
 
