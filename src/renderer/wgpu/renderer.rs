@@ -60,7 +60,7 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(window: &Window, config: GraphicsConfig) -> Result<Self, WgpuError> {
-        let instance = Instance::new(InstanceDescriptor::default());
+        let instance = Instance::new(&InstanceDescriptor::default());
 
         let raw_display_handle = window.raw_display_handle();
         let raw_window_handle = window.raw_window_handle();
@@ -124,7 +124,7 @@ impl Renderer {
         let state = Arc::new(pollster::block_on(RenderState::create(
             &config.wgpu_options,
             &instance,
-            &surface,
+            Some(&surface),
             None,
             MSAA_SAMPLES,
             config.dithering,
