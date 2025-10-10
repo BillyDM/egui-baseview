@@ -13,7 +13,7 @@ use egui_wgpu::{
         SurfaceTargetUnsafe, TextureDescriptor, TextureDimension, TextureUsages, TextureView,
         TextureViewDescriptor,
     },
-    RenderState, ScreenDescriptor, WgpuError,
+    RenderState, RendererOptions, ScreenDescriptor, WgpuError,
 };
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use raw_window_handle_06::{
@@ -36,6 +36,9 @@ pub struct GraphicsConfig {
 
     /// Configures wgpu instance/device/adapter/surface creation and renderloop.
     pub wgpu_options: WgpuConfiguration,
+
+    /// Additional options for the wgpu renderer.
+    pub renderer_options: RendererOptions,
 }
 
 impl Default for GraphicsConfig {
@@ -43,17 +46,17 @@ impl Default for GraphicsConfig {
         Self {
             dithering: true,
             wgpu_options: Default::default(),
+            renderer_options: Default::default(),
         }
     }
 }
-
-const MSAA_SAMPLES: u32 = 4;
 
 pub struct Renderer {
     render_state: Arc<RenderState>,
     surface: Surface<'static>,
     config: GraphicsConfig,
     msaa_texture_view: Option<TextureView>,
+    msaa_samples: u32,
     width: u32,
     height: u32,
 }
@@ -121,13 +124,13 @@ impl Renderer {
 
         let surface = unsafe { instance.create_surface_unsafe(target) }.unwrap();
 
+        let msaa_samples = config.renderer_options.msaa_samples;
+
         let state = Arc::new(pollster::block_on(RenderState::create(
             &config.wgpu_options,
             &instance,
             Some(&surface),
-            None,
-            MSAA_SAMPLES,
-            config.dithering,
+            config.renderer_options,
         ))?);
 
         Ok(Self {
@@ -135,6 +138,7 @@ impl Renderer {
             surface,
             config,
             msaa_texture_view: None,
+            msaa_samples,
             width: 0,
             height: 0,
         })
@@ -181,25 +185,28 @@ impl Renderer {
         self.configure_surface(width, height);
 
         let texture_format = render_state.target_format;
-        self.msaa_texture_view = Some(
-            render_state
-                .device
-                .create_texture(&TextureDescriptor {
-                    label: Some("egui_msaa_texture"),
-                    size: Extent3d {
-                        width,
-                        height,
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: 1,
-                    sample_count: MSAA_SAMPLES,
-                    dimension: TextureDimension::D2,
-                    format: texture_format,
-                    usage: TextureUsages::RENDER_ATTACHMENT,
-                    view_formats: &[texture_format],
-                })
-                .create_view(&TextureViewDescriptor::default()),
-        );
+
+        if self.msaa_samples > 1 {
+            self.msaa_texture_view = Some(
+                render_state
+                    .device
+                    .create_texture(&TextureDescriptor {
+                        label: Some("egui_msaa_texture"),
+                        size: Extent3d {
+                            width,
+                            height,
+                            depth_or_array_layers: 1,
+                        },
+                        mip_level_count: 1,
+                        sample_count: self.msaa_samples.max(1),
+                        dimension: TextureDimension::D2,
+                        format: texture_format,
+                        usage: TextureUsages::RENDER_ATTACHMENT,
+                        view_formats: &[texture_format],
+                    })
+                    .create_view(&TextureViewDescriptor::default()),
+            );
+        }
     }
 
     pub fn render(
@@ -277,11 +284,18 @@ impl Renderer {
                 .texture
                 .create_view(&TextureViewDescriptor::default());
 
+            let (view, resolve_target) = if let Some(msaa_view) = &self.msaa_texture_view {
+                (msaa_view, Some(&frame_view))
+            } else {
+                (&frame_view, None)
+            };
+
             let render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("egui_render"),
                 color_attachments: &[Some(RenderPassColorAttachment {
-                    view: self.msaa_texture_view.as_ref().unwrap(),
-                    resolve_target: Some(&frame_view),
+                    view,
+                    depth_slice: None,
+                    resolve_target,
                     ops: egui_wgpu::wgpu::Operations {
                         load: egui_wgpu::wgpu::LoadOp::Clear(Color {
                             r: bg_color[0] as f64,

@@ -1,6 +1,6 @@
 [package]
 name = "egui-baseview"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Billy Messenger <60663878+BillyDM@users.noreply.github.com>"]
 edition = "2021"
 description = "A baseview backend for egui"
@@ -27,10 +27,10 @@ rayon = ["egui/rayon"]
 windows_keyboard_workaround = []
 
 [dependencies]
-egui = { version = "0.32", default-features = false, features = ["bytemuck"] }
-egui_glow = { version = "0.32", features = ["x11"], optional = true }
-egui-wgpu = { version = "0.32", features = ["x11"], optional = true }
-wgpu = { version = "25.0.0", optional = true }
+egui = { version = "0.33", default-features = false, features = ["bytemuck"] }
+egui_glow = { version = "0.33", features = ["x11"], optional = true }
+egui-wgpu = { version = "0.33", features = ["x11"], optional = true }
+wgpu = { version = "27.0.1", optional = true }
 keyboard-types = { version = "0.6", default-features = false }
 #baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "3724a00c970a9cd10a3494fa3c37bca66d631bb7" }
 baseview = { git = "https://github.com/blepfx/baseview.git", rev = "042f0c6cbc4a8befdd152f61128a2bd83d7bae12" }
