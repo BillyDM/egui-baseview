@@ -75,7 +75,7 @@ impl Default for GainParams {
 }
 
 impl Plugin for Gain {
-    const NAME: &'static str = "Gain GUI (egui)";
+    const NAME: &'static str = "Gain (nih_plug_egui)";
     const VENDOR: &'static str = "Moist Plugins GmbH";
     const URL: &'static str = "https://youtu.be/dQw4w9WgXcQ";
     const EMAIL: &'static str = "info@example.com";
@@ -128,27 +128,22 @@ impl Plugin for Gain {
                         ui.add(widgets::ParamSlider::for_param(&params.gain, setter));
 
                         ui.label(
-                        "Also gain, but with a lame widget. Can't even render the value correctly!",
-                    );
-                        // This is a simple naieve version of a parameter slider that's not aware of how
-                        // the parameters work
-                        ui.add(
-                            egui::widgets::Slider::from_get_set(-30.0..=30.0, |new_value| {
-                                match new_value {
-                                    Some(new_value_db) => {
-                                        let new_value = util::gain_to_db(new_value_db as f32);
-
-                                        setter.begin_set_parameter(&params.gain);
-                                        setter.set_parameter(&params.gain, new_value);
-                                        setter.end_set_parameter(&params.gain);
-
-                                        new_value_db
-                                    }
-                                    None => util::gain_to_db(params.gain.value()) as f64,
-                                }
-                            })
-                            .suffix(" dB"),
+                        "Also gain, but with a standard widget. Note that it doesn't properly take the parameter curve into account!",
                         );
+
+                        // This is a simple naive version of a parameter slider that's not aware of how
+                        // the parameters work
+                        let prev_value = nih_plug::util::gain_to_db(params.gain.value());
+                        let mut new_value = prev_value;
+                        ui.add(
+                            egui::widgets::Slider::new(&mut new_value, -30.0..=30.0).suffix(" dB"),
+                        );
+                        if new_value != prev_value {
+                            setter.begin_set_parameter(&params.gain);
+                            setter
+                                .set_parameter(&params.gain, nih_plug::util::db_to_gain(new_value));
+                            setter.end_set_parameter(&params.gain);
+                        }
 
                         // TODO: Add a proper custom widget instead of reusing a progress bar
                         let peak_meter =
@@ -223,7 +218,7 @@ impl Plugin for Gain {
 }
 
 impl ClapPlugin for Gain {
-    const CLAP_ID: &'static str = "com.moist-plugins-gmbh-egui.gain-gui";
+    const CLAP_ID: &'static str = "com.moist-plugins-gmbh-egui.nih-plug-gain-egui";
     const CLAP_DESCRIPTION: Option<&'static str> = Some("A smoothed gain parameter example plugin");
     const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
