@@ -2,19 +2,25 @@
 name = "egui-baseview"
 version = "0.7.0"
 authors = ["Billy Messenger <60663878+BillyDM@users.noreply.github.com>"]
-edition = "2021"
 description = "A baseview backend for egui"
-license = "MIT"
-repository = "https://github.com/BillyDM/egui-baseview"
 documentation = "https://docs.rs/egui-baseview"
 keywords = ["gui", "ui", "graphics", "interface", "widgets"]
 categories = ["gui"]
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/BillyDM/egui-baseview"
 readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["opengl", "default_fonts"]
+default = ["opengl", "default_fonts", "tracing"]
 default_fonts = ["egui/default_fonts"]
 opengl = ["dep:egui_glow", "baseview/opengl"]
 wgpu = ["dep:egui-wgpu", "dep:raw-window-handle-06", "dep:pollster", "dep:wgpu"]
@@ -22,23 +28,39 @@ wgpu = ["dep:egui-wgpu", "dep:raw-window-handle-06", "dep:pollster", "dep:wgpu"]
 ##
 ## This can help performance for graphics-intense applications.
 rayon = ["egui/rayon"]
-## Enables a temporary workaround for keyboard input not working sometimes in Windows.
+## Enables a temporary workaround for keyboard input not working sometimes.
 ## See https://github.com/BillyDM/egui-baseview/issues/20
-windows_keyboard_workaround = []
+keyboard_focus_workaround = []
+## Enables logging using NIH-plug's logging feature
+nih_log = ["dep:nih_plug"]
+## Enable this if `nih_log` is disabled
+tracing = ["dep:tracing"]
+
+[workspace]
+members = [
+    "nih_plug_egui",
+    "nih_plug_egui/xtask",
+    "examples/nih_plug_gain_egui"
+]
+
+[workspace.dependencies]
+raw-window-handle = "0.5"
+baseview = { git = "https://github.com/blepfx/baseview.git", rev = "237d323c729f3aa99476ba3efa50129c5e86cad3" }
+nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", rev = "28b149ec4d62757d0b448809148a0c3ca6e09a95", default-features = false }
 
 [dependencies]
+baseview.workspace = true
+raw-window-handle.workspace = true
 egui = { version = "0.33", default-features = false, features = ["bytemuck"] }
 egui_glow = { version = "0.33", features = ["x11"], optional = true }
 egui-wgpu = { version = "0.33", features = ["x11"], optional = true }
 wgpu = { version = "27.0.1", optional = true }
 keyboard-types = { version = "0.6", default-features = false }
-#baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "3724a00c970a9cd10a3494fa3c37bca66d631bb7" }
-baseview = { git = "https://github.com/blepfx/baseview.git", rev = "042f0c6cbc4a8befdd152f61128a2bd83d7bae12" }
-raw-window-handle = "0.5"
 raw-window-handle-06 = { package = "raw-window-handle", version = "0.6", optional = true }
 # TODO: Enable wayland feature when baseview gets wayland support.
 copypasta = { version = "0.10", default-features = false, features = ["x11"] }
-log = "0.4"
+nih_plug = { workspace = true, optional = true }
+tracing = { version = "0.1", optional = true }
 open = "5.1"
 pollster = { version = "0.4", optional = true }
 thiserror = "2.0"

@@ -11,6 +11,12 @@ use raw_window_handle::HasRawWindowHandle;
 
 use crate::{renderer::Renderer, GraphicsConfig};
 
+#[cfg(feature = "nih_log")]
+use nih_plug::log::{error, warn};
+
+#[cfg(all(feature = "tracing", not(feature = "nih_log")))]
+use tracing::{error, warn};
+
 pub struct Queue<'a> {
     bg_color: &'a mut Rgba,
     close_requested: &'a mut bool,
@@ -122,7 +128,7 @@ where
     {
         let renderer = Renderer::new(window, graphics_config).unwrap_or_else(|err| {
             // TODO: better error log and not panicking, but that's gonna require baseview changes
-            log::error!("oops! the gpu backend couldn't initialize! \n {err}");
+            error!("oops! the gpu backend couldn't initialize! \n {err}");
             panic!("gpu backend failed to initialize: \n {err}")
         });
         let egui_ctx = egui::Context::default();
@@ -172,7 +178,7 @@ where
         let clipboard_ctx = match copypasta::ClipboardContext::new() {
             Ok(clipboard_ctx) => Some(clipboard_ctx),
             Err(e) => {
-                log::error!("Failed to initialize clipboard: {}", e);
+                error!("Failed to initialize clipboard: {}", e);
                 None
             }
         };
@@ -367,16 +373,16 @@ where
                 egui::OutputCommand::CopyText(text) => {
                     if let Some(clipboard_ctx) = &mut self.clipboard_ctx {
                         if let Err(err) = clipboard_ctx.set_contents(text) {
-                            log::error!("Copy/Cut error: {}", err);
+                            error!("Copy/Cut error: {}", err);
                         }
                     }
                 }
                 egui::OutputCommand::CopyImage(_) => {
-                    log::warn!("Copying images is not supported in egui_baseview.");
+                    warn!("Copying images is not supported in egui_baseview.");
                 }
                 egui::OutputCommand::OpenUrl(open_url) => {
                     if let Err(err) = open::that_detached(&open_url.url) {
-                        log::error!("Open error: {}", err);
+                        error!("Open error: {}", err);
                     }
                 }
             }
@@ -394,7 +400,7 @@ where
 
         // A temporary workaround for keyboard input not working sometimes in Windows.
         // See https://github.com/BillyDM/egui-baseview/issues/20
-        #[cfg(feature = "windows_keyboard_workaround")]
+        #[cfg(feature = "keyboard_focus_workaround")]
         {
             #[cfg(target_os = "windows")]
             {
@@ -539,7 +545,7 @@ where
                                     self.egui_input.events.push(egui::Event::Text(contents))
                                 }
                                 Err(err) => {
-                                    log::error!("Paste error: {}", err);
+                                    error!("Paste error: {}", err);
                                 }
                             }
                         }

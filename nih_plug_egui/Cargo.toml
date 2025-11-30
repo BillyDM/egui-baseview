@@ -1,0 +1,36 @@
+[package]
+name = "nih_plug_egui"
+version = "0.1.0"
+authors = [
+    "Billy Messenger <billydm@noreply.codeberg.org>",
+    "Robbert van der Helm <mail@robbertvanderhelm.nl>",
+]
+description = "An adapter to use egui GUIs with NIH-plug"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[features]
+default = ["opengl", "default_fonts"]
+# `nih_plug_egui` always uses OpenGL since egui's wgpu backend is still unstable
+# depending on the platform
+opengl = ["egui-baseview/opengl"]
+default_fonts = ["egui-baseview/default_fonts"]
+## Enable parallel tessellation using [`rayon`](https://docs.rs/rayon).
+##
+## This can help performance for graphics-intense applications.
+rayon = ["egui-baseview/rayon"]
+## Enables a temporary workaround for keyboard input not working sometimes.
+## See https://github.com/BillyDM/egui-baseview/issues/20
+keyboard_focus_workaround = ["egui-baseview/keyboard_focus_workaround"]
+
+[dependencies]
+baseview.workspace = true
+raw-window-handle.workspace = true
+nih_plug.workspace = true
+egui-baseview = { path = "../", default-features = false, features = ["nih_log"] }
+crossbeam = "0.8"
+parking_lot = "0.12"
+# To make the state persistable
+serde = { version = "1.0", features = ["derive"] }

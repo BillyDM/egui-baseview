@@ -1,0 +1,24 @@
+[package]
+name = "nih_plug_gain_egui"
+version = "0.1.0"
+authors = [
+    "Billy Messenger <billydm@noreply.codeberg.org>",
+    "Robbert van der Helm <mail@robbertvanderhelm.nl>",
+]
+description = "A simple gain plugin with an egui GUI"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[lib]
+# The `lib` artifact is needed for the standalone target
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+nih_plug = { workspace = true, default-features = true, features = [
+    "assert_process_allocs",
+    "standalone",
+] }
+nih_plug_egui = { path = "../../nih_plug_egui" }
+atomic_float = "1.1"

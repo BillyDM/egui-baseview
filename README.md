@@ -2,17 +2,49 @@
 ![Test](https://github.com/BillyDM/egui-baseview/workflows/Rust/badge.svg)
 [![License](https://img.shields.io/crates/l/egui-baseview.svg)](https://github.com/BillyDM/egui-baseview/blob/main/LICENSE)
 
-A [`baseview`](https://github.com/RustAudio/baseview) backend for [`egui`](https://github.com/emilk/egui).
+A [`baseview`](https://github.com/RustAudio/baseview) backend for [`egui`](https://github.com/emilk/egui). This also contains an adapter for [`NIH-plug`](https://github.com/robbert-vdh/nih-plug).
 
 <div align="center">
     <img src="screenshot.png">
 </div>
 
-## Audio Plugins
 
-This backend is officially supported by [`nih-plug`](https://github.com/robbert-vdh/nih-plug). The nih-plug example plugin can be found [here](https://github.com/robbert-vdh/nih-plug/tree/master/plugins/examples/gain_gui_egui).
+## How to use with custom plugin framework
 
-There is also an (outdated) vst2 example plugin [here](https://github.com/DGriffin91/egui_baseview_test_vst2).
+Add the following to your `Cargo.toml`:
+
+```toml
+egui-baseview = { git = "https://codeberg.org/BillyDM/nih-plug-egui", branch = "main }
+```
+
+or if you want to use a specific version of egui:
+
+```toml
+egui-baseview = { git = "https://codeberg.org/BillyDM/nih-plug-egui", branch = "egui_32 }
+```
+
+*(Example plugin code is still a WIP)*
+
+## How to use with NIH-plug
+
+Add the following to your `Cargo.toml` (in place of `nih_plug_vizia`):
+
+```toml
+nih_plug_egui = { git = "https://codeberg.org/BillyDM/nih-plug-egui", branch = "main }
+```
+
+or if you want to use a specific version of egui:
+
+```toml
+nih_plug_egui = { git = "https://codeberg.org/BillyDM/nih-plug-egui", branch = "egui_32 }
+```
+
+See the `nih_plug_gain_egui` example for how to hook up `egui` to your plugin.
+
+To build the `nih_plug_gain_egui` example, run:
+```
+cargo xtask bundle nih_plug_gain_egui --release
+```
 
 ## Prerequisites
 
