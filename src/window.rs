@@ -398,11 +398,11 @@ where
             window.set_mouse_cursor(cursor_icon);
         }
 
-        // A temporary workaround for keyboard input not working sometimes in Windows.
+        // A temporary workaround for keyboard input not working sometimes.
         // See https://github.com/BillyDM/egui-baseview/issues/20
         #[cfg(feature = "keyboard_focus_workaround")]
         {
-            #[cfg(target_os = "windows")]
+            #[cfg(any(target_os = "windows", target_os = "macos"))]
             {
                 if !full_output.platform_output.events.is_empty()
                     || full_output.platform_output.ime.is_some()
