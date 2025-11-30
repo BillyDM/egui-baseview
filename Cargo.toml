@@ -51,9 +51,9 @@ nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", rev = "28b149e
 [dependencies]
 baseview.workspace = true
 raw-window-handle.workspace = true
-egui = { version = "0.32", default-features = false, features = ["bytemuck"] }
-egui_glow = { version = "0.32", features = ["x11"], optional = true }
-egui-wgpu = { version = "0.32", features = ["x11"], optional = true }
+egui = { version = "0.31", default-features = false, features = ["bytemuck"] }
+egui_glow = { version = "0.31", features = ["x11"], optional = true }
+egui-wgpu = { version = "0.31", features = ["x11"], optional = true }
 wgpu = { version = "27.0.1", optional = true }
 keyboard-types = { version = "0.6", default-features = false }
 raw-window-handle-06 = { package = "raw-window-handle", version = "0.6", optional = true }
