@@ -14,13 +14,13 @@ A [`baseview`](https://github.com/RustAudio/baseview) backend for [`egui`](https
 Add the following to your `Cargo.toml`:
 
 ```toml
-egui-baseview = { git = "https://codeberg.org/BillyDM/nih-plug-egui", branch = "main }
+egui-baseview = { git = "https://codeberg.org/BillyDM/egui-baseview", branch = "main }
 ```
 
 or if you want to use a specific version of egui:
 
 ```toml
-egui-baseview = { git = "https://codeberg.org/BillyDM/nih-plug-egui", branch = "egui_32 }
+egui-baseview = { git = "https://codeberg.org/BillyDM/egui-baseview", branch = "egui_32 }
 ```
 
 *(Example plugin code is still a WIP)*
@@ -30,13 +30,13 @@ egui-baseview = { git = "https://codeberg.org/BillyDM/nih-plug-egui", branch = "
 Add the following to your `Cargo.toml` (in place of `nih_plug_vizia`):
 
 ```toml
-nih_plug_egui = { git = "https://codeberg.org/BillyDM/nih-plug-egui", branch = "main }
+nih_plug_egui = { git = "https://codeberg.org/BillyDM/egui-baseview", branch = "main }
 ```
 
 or if you want to use a specific version of egui:
 
 ```toml
-nih_plug_egui = { git = "https://codeberg.org/BillyDM/nih-plug-egui", branch = "egui_32 }
+nih_plug_egui = { git = "https://codeberg.org/BillyDM/egui-baseview", branch = "egui_32 }
 ```
 
 See the `nih_plug_gain_egui` example for how to hook up `egui` to your plugin.
