@@ -45,7 +45,7 @@ members = [
 
 [workspace.dependencies]
 raw-window-handle = "0.5"
-baseview = { git = "https://github.com/blepfx/baseview.git", rev = "237d323c729f3aa99476ba3efa50129c5e86cad3" }
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "237d323c729f3aa99476ba3efa50129c5e86cad3" }
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", rev = "28b149ec4d62757d0b448809148a0c3ca6e09a95", default-features = false }
 
 [dependencies]
