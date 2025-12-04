@@ -9,6 +9,7 @@ use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
 use egui_baseview::egui::Context;
 use egui_baseview::EguiWindow;
+use egui_baseview::Queue;
 use nih_plug::prelude::{Editor, GuiContext, ParamSetter, ParentWindowHandle};
 use parking_lot::RwLock;
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
@@ -22,9 +23,10 @@ pub(crate) struct EguiEditor<T> {
     pub(crate) user_state: Arc<RwLock<T>>,
 
     /// The user's build function. Applied once at the start of the application.
-    pub(crate) build: Arc<dyn Fn(&Context, &mut T) + 'static + Send + Sync>,
+    pub(crate) build: Arc<dyn Fn(&Context, &mut Queue, &mut T) + 'static + Send + Sync>,
     /// The user's update function.
-    pub(crate) update: Arc<dyn Fn(&Context, &ParamSetter, &mut T) + 'static + Send + Sync>,
+    pub(crate) update:
+        Arc<dyn Fn(&Context, &ParamSetter, &mut Queue, &mut T) + 'static + Send + Sync>,
 
     /// The scaling factor reported by the host, if any. On macOS this will never be set and we
     /// should use the system scaling factor instead.
@@ -103,7 +105,7 @@ where
             },
             Default::default(),
             state,
-            move |egui_ctx, _queue, state| build(egui_ctx, &mut state.write()),
+            move |egui_ctx, queue, state| build(egui_ctx, queue, &mut state.write()),
             move |egui_ctx, queue, state| {
                 let setter = ParamSetter::new(context.as_ref());
 
@@ -128,7 +130,7 @@ where
                 // this we would also have a blank GUI when it gets first opened because most DAWs open
                 // their GUI while the window is still unmapped.
                 egui_ctx.request_repaint();
-                (update)(egui_ctx, &setter, &mut state.write());
+                (update)(egui_ctx, &setter, queue, &mut state.write());
             },
         );
 

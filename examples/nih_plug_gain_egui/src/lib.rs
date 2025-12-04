@@ -111,8 +111,8 @@ impl Plugin for Gain {
         create_egui_editor(
             self.params.editor_state.clone(),
             (),
-            |_, _| {},
-            move |egui_ctx, setter, _state| {
+            |_, _, _| {},
+            move |egui_ctx, setter, _queue, _state| {
                 ResizableWindow::new("res-wind")
                     .min_size(Vec2::new(128.0, 128.0))
                     .show(egui_ctx, egui_state.as_ref(), |ui| {

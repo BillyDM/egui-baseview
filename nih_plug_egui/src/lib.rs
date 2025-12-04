@@ -7,6 +7,7 @@
 
 use crossbeam::atomic::AtomicCell;
 use egui::Context;
+use egui_baseview::Queue;
 use nih_plug::params::persist::PersistentField;
 use nih_plug::prelude::{Editor, ParamSetter};
 use parking_lot::RwLock;
@@ -42,8 +43,8 @@ pub fn create_egui_editor<T, B, U>(
 ) -> Option<Box<dyn Editor>>
 where
     T: 'static + Send + Sync,
-    B: Fn(&Context, &mut T) + 'static + Send + Sync,
-    U: Fn(&Context, &ParamSetter, &mut T) + 'static + Send + Sync,
+    B: Fn(&Context, &mut Queue, &mut T) + 'static + Send + Sync,
+    U: Fn(&Context, &ParamSetter, &mut Queue, &mut T) + 'static + Send + Sync,
 {
     Some(Box::new(editor::EguiEditor {
         egui_state,
