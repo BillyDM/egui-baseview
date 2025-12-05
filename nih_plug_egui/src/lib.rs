@@ -18,7 +18,7 @@ use std::sync::Arc;
 compile_error!("There's currently no software rendering support for egui");
 
 /// Re-export for convenience.
-pub use egui_baseview::egui;
+pub use egui_baseview::*;
 
 mod editor;
 pub mod resizable_window;
@@ -42,8 +42,8 @@ pub fn create_egui_editor<T, B, U>(
 ) -> Option<Box<dyn Editor>>
 where
     T: 'static + Send + Sync,
-    B: Fn(&Context, &mut T) + 'static + Send + Sync,
-    U: Fn(&Context, &ParamSetter, &mut T) + 'static + Send + Sync,
+    B: Fn(&Context, &mut Queue, &mut T) + 'static + Send + Sync,
+    U: Fn(&Context, &ParamSetter, &mut Queue, &mut T) + 'static + Send + Sync,
 {
     Some(Box::new(editor::EguiEditor {
         egui_state,
