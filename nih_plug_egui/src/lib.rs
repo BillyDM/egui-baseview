@@ -20,9 +20,55 @@ compile_error!("There's currently no software rendering support for egui");
 /// Re-export for convenience.
 pub use egui_baseview::*;
 
+#[cfg(feature = "opengl")]
+pub use baseview::gl::{GlConfig, Profile};
+
 mod editor;
 pub mod resizable_window;
 pub mod widgets;
+
+#[derive(Debug, Clone)]
+pub struct EguiSettings {
+    pub graphics_config: GraphicsConfig,
+
+    #[cfg(feature = "opengl")]
+    /// By default this is set to `false`.
+    pub enable_vsync_on_x11: bool,
+
+    #[cfg(feature = "opengl")]
+    /// The configuration of the OpenGL context.
+    ///
+    /// By default this is set to:
+    /// ```ignore
+    /// GlConfig {
+    ///     version: (3, 2),
+    ///     profile: Profile::Core,
+    ///     red_bits: 8,
+    ///     blue_bits: 8,
+    ///     green_bits: 8,
+    ///     alpha_bits: 8,
+    ///     depth_bits: 24,
+    ///     stencil_bits: 8,
+    ///     samples: None,
+    ///     srgb: true,
+    ///     double_buffer: true,
+    ///     vsync: false,
+    /// }
+    /// ```
+    pub gl_config: GlConfig,
+}
+
+impl Default for EguiSettings {
+    fn default() -> Self {
+        Self {
+            graphics_config: Default::default(),
+            #[cfg(feature = "opengl")]
+            enable_vsync_on_x11: false,
+            #[cfg(feature = "opengl")]
+            gl_config: GlConfig::default(),
+        }
+    }
+}
 
 /// Create an [`Editor`] instance using an [`egui`][::egui] GUI. Using the user state parameter is
 /// optional, but it can be useful for keeping track of some temporary GUI-only settings. See the
@@ -37,6 +83,7 @@ pub mod widgets;
 pub fn create_egui_editor<T, B, U>(
     egui_state: Arc<EguiState>,
     user_state: T,
+    settings: EguiSettings,
     build: B,
     update: U,
 ) -> Option<Box<dyn Editor>>
@@ -48,6 +95,7 @@ where
     Some(Box::new(editor::EguiEditor {
         egui_state,
         user_state: Arc::new(RwLock::new(user_state)),
+        settings: Arc::new(settings),
         build: Arc::new(build),
         update: Arc::new(update),
 
