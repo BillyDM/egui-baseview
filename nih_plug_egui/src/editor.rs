@@ -2,13 +2,14 @@
 
 use crate::egui::Vec2;
 use crate::egui::ViewportCommand;
+use crate::EguiSettings;
 use crate::EguiState;
-use baseview::gl::GlConfig;
 use baseview::PhySize;
 use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
 use crossbeam::atomic::AtomicCell;
 use egui_baseview::egui::Context;
 use egui_baseview::EguiWindow;
+use egui_baseview::Queue;
 use nih_plug::prelude::{Editor, GuiContext, ParamSetter, ParentWindowHandle};
 use parking_lot::RwLock;
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
@@ -21,10 +22,13 @@ pub(crate) struct EguiEditor<T> {
     /// The plugin's state. This is kept in between editor openenings.
     pub(crate) user_state: Arc<RwLock<T>>,
 
+    pub(crate) settings: Arc<EguiSettings>,
+
     /// The user's build function. Applied once at the start of the application.
-    pub(crate) build: Arc<dyn Fn(&Context, &mut T) + 'static + Send + Sync>,
+    pub(crate) build: Arc<dyn Fn(&Context, &mut Queue, &mut T) + 'static + Send + Sync>,
     /// The user's update function.
-    pub(crate) update: Arc<dyn Fn(&Context, &ParamSetter, &mut T) + 'static + Send + Sync>,
+    pub(crate) update:
+        Arc<dyn Fn(&Context, &ParamSetter, &mut Queue, &mut T) + 'static + Send + Sync>,
 
     /// The scaling factor reported by the host, if any. On macOS this will never be set and we
     /// should use the system scaling factor instead.
@@ -71,6 +75,23 @@ where
         let state = self.user_state.clone();
         let egui_state = self.egui_state.clone();
 
+        #[cfg(feature = "opengl")]
+        let gl_config = {
+            let is_x11 = if let ParentWindowHandle::X11Window(_) = &parent {
+                true
+            } else {
+                false
+            };
+
+            let mut gl_config = self.settings.gl_config.clone();
+
+            if is_x11 && self.settings.enable_vsync_on_x11 {
+                gl_config.vsync = true;
+            }
+
+            gl_config
+        };
+
         let (unscaled_width, unscaled_height) = self.egui_state.size();
         let scaling_factor = self.scaling_factor.load();
         let window = EguiWindow::open_parented(
@@ -86,24 +107,11 @@ where
                     .unwrap_or(WindowScalePolicy::SystemScaleFactor),
 
                 #[cfg(feature = "opengl")]
-                gl_config: Some(GlConfig {
-                    version: (3, 2),
-                    red_bits: 8,
-                    blue_bits: 8,
-                    green_bits: 8,
-                    alpha_bits: 8,
-                    depth_bits: 24,
-                    stencil_bits: 8,
-                    samples: None,
-                    srgb: true,
-                    double_buffer: true,
-                    vsync: true,
-                    ..Default::default()
-                }),
+                gl_config: Some(gl_config),
             },
-            Default::default(),
+            self.settings.graphics_config.clone(),
             state,
-            move |egui_ctx, _queue, state| build(egui_ctx, &mut state.write()),
+            move |egui_ctx, queue, state| build(egui_ctx, queue, &mut state.write()),
             move |egui_ctx, queue, state| {
                 let setter = ParamSetter::new(context.as_ref());
 
@@ -128,7 +136,7 @@ where
                 // this we would also have a blank GUI when it gets first opened because most DAWs open
                 // their GUI while the window is still unmapped.
                 egui_ctx.request_repaint();
-                (update)(egui_ctx, &setter, &mut state.write());
+                (update)(egui_ctx, &setter, queue, &mut state.write());
             },
         );
 
