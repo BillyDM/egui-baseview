@@ -7,7 +7,6 @@
 
 use crossbeam::atomic::AtomicCell;
 use egui::Context;
-use egui_baseview::Queue;
 use nih_plug::params::persist::PersistentField;
 use nih_plug::prelude::{Editor, ParamSetter};
 use parking_lot::RwLock;
@@ -19,7 +18,7 @@ use std::sync::Arc;
 compile_error!("There's currently no software rendering support for egui");
 
 /// Re-export for convenience.
-pub use egui_baseview::egui;
+pub use egui_baseview::*;
 
 mod editor;
 pub mod resizable_window;
