@@ -21,6 +21,7 @@ pub struct Queue<'a> {
     bg_color: &'a mut Rgba,
     close_requested: &'a mut bool,
     physical_size: &'a mut PhySize,
+    key_capture: &'a mut KeyCapture,
 }
 
 impl<'a> Queue<'a> {
@@ -28,6 +29,7 @@ impl<'a> Queue<'a> {
         bg_color: &'a mut Rgba,
         close_requested: &'a mut bool,
         physical_size: &'a mut PhySize,
+        key_capture: &'a mut KeyCapture,
     ) -> Self {
         Self {
             bg_color,
@@ -35,6 +37,7 @@ impl<'a> Queue<'a> {
             //repaint_requested,
             close_requested,
             physical_size,
+            key_capture,
         }
     }
 
@@ -51,6 +54,11 @@ impl<'a> Queue<'a> {
     /// Close the window.
     pub fn close_window(&mut self) {
         *self.close_requested = true;
+    }
+
+    /// Set how to handle capturing key events from the host.
+    pub fn set_key_capture(&mut self, key_capture: KeyCapture) {
+        *self.key_capture = key_capture;
     }
 }
 
@@ -76,6 +84,20 @@ impl OpenSettings {
             title: settings.title.clone(),
         }
     }
+}
+
+/// Describes how to handle capturing key events from the host.
+#[derive(Default, Debug, Clone, PartialEq)]
+pub enum KeyCapture {
+    #[default]
+    /// All keys will be captured from the host.
+    CaptureAll,
+    /// No keys will be captured from the host.
+    IgnoreAll,
+    /// Only the given keys will be captured from the host.
+    CaptureKeys(Vec<keyboard_types::Key>),
+    /// All keys except the given ones will be captured from the host.
+    IgnoreKeys(Vec<keyboard_types::Key>),
 }
 
 /// Handles an egui-baseview application
@@ -106,6 +128,7 @@ where
     bg_color: Rgba,
     close_requested: bool,
     repaint_after: Option<Instant>,
+    key_capture: KeyCapture,
 }
 
 impl<State, U> EguiWindow<State, U>
@@ -172,7 +195,13 @@ where
 
         let mut bg_color = Rgba::BLACK;
         let mut close_requested = false;
-        let mut queue = Queue::new(&mut bg_color, &mut close_requested, &mut physical_size);
+        let mut key_capture = KeyCapture::default();
+        let mut queue = Queue::new(
+            &mut bg_color,
+            &mut close_requested,
+            &mut physical_size,
+            &mut key_capture,
+        );
         (build)(&egui_ctx, &mut queue, &mut state);
 
         let clipboard_ctx = match copypasta::ClipboardContext::new() {
@@ -207,6 +236,7 @@ where
             bg_color,
             close_requested,
             repaint_after: Some(start_time),
+            key_capture,
         }
     }
 
@@ -313,6 +343,7 @@ where
             &mut self.bg_color,
             &mut self.close_requested,
             &mut self.physical_size,
+            &mut self.key_capture,
         );
 
         (self.user_update)(&self.egui_ctx, &mut queue, state);
@@ -414,6 +445,8 @@ where
     }
 
     fn on_event(&mut self, _window: &mut Window, event: Event) -> EventStatus {
+        let mut return_status = EventStatus::Captured;
+
         match &event {
             baseview::Event::Mouse(event) => match event {
                 baseview::MouseEvent::CursorMoved {
@@ -557,6 +590,21 @@ where
                         }
                     }
                 }
+
+                match &self.key_capture {
+                    KeyCapture::CaptureAll => {}
+                    KeyCapture::IgnoreAll => return_status = EventStatus::Ignored,
+                    KeyCapture::CaptureKeys(keys) => {
+                        if !keys.contains(&event.key) {
+                            return_status = EventStatus::Ignored
+                        }
+                    }
+                    KeyCapture::IgnoreKeys(keys) => {
+                        if keys.contains(&event.key) {
+                            return_status = EventStatus::Ignored
+                        }
+                    }
+                }
             }
             baseview::Event::Window(event) => match event {
                 baseview::WindowEvent::Resized(window_info) => {
@@ -608,7 +656,7 @@ where
             },
         }
 
-        EventStatus::Captured
+        return_status
     }
 }
 
