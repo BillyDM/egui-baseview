@@ -656,7 +656,7 @@ where
             },
         }
 
-// For keyboard events, also check if egui actually wants keyboard input
+        // For keyboard events, also check if egui actually wants keyboard input
         // This allows DAW shortcuts (spacebar, etc.) to pass through when no text field is focused
         match &event {
             baseview::Event::Keyboard(_) => {
