@@ -656,7 +656,25 @@ where
             },
         }
 
-        return_status
+        // For keyboard events, also check if egui actually wants keyboard input
+        // This allows DAW shortcuts (spacebar, etc.) to pass through when no text field is focused
+        match &event {
+            baseview::Event::Keyboard(_) => {
+                if return_status == EventStatus::Captured && !self.egui_ctx.wants_keyboard_input() {
+                    EventStatus::Ignored
+                } else {
+                    return_status
+                }
+            }
+            baseview::Event::Mouse(_) => {
+                if self.egui_ctx.is_using_pointer() || self.egui_ctx.wants_pointer_input() {
+                    EventStatus::Captured
+                } else {
+                    EventStatus::Ignored
+                }
+            }
+            baseview::Event::Window(_) => EventStatus::Captured,
+        }
     }
 }
 
