@@ -5,7 +5,7 @@ use baseview::{
     WindowScalePolicy,
 };
 use copypasta::ClipboardProvider;
-use egui::{pos2, vec2, Pos2, Rect, Rgba, ViewportCommand};
+use egui::{pos2, vec2, Id, Pos2, Rect, Rgba, ViewportCommand};
 use keyboard_types::Modifiers;
 use raw_window_handle::HasRawWindowHandle;
 
@@ -22,6 +22,14 @@ pub struct Queue<'a> {
     close_requested: &'a mut bool,
     physical_size: &'a mut PhySize,
     key_capture: &'a mut KeyCapture,
+}
+
+fn screen_cursor_pos_id() -> Id {
+    Id::new("egui_baseview_screen_cursor_pos")
+}
+
+pub fn screen_cursor_pos(ctx: &egui::Context) -> Option<egui::Pos2> {
+    ctx.data(|data| data.get_temp::<egui::Pos2>(screen_cursor_pos_id()))
 }
 
 impl<'a> Queue<'a> {
@@ -317,6 +325,23 @@ where
         self.egui_input.modifiers.shift = !(*modifiers & Modifiers::SHIFT).is_empty();
         self.egui_input.modifiers.command = !(*modifiers & Modifiers::CONTROL).is_empty();
     }
+
+    fn apply_window_resize(&mut self, physical_size: PhySize, pixels_per_point: f32) {
+        self.pixels_per_point = pixels_per_point;
+        self.points_per_pixel = pixels_per_point.recip();
+        self.physical_size = physical_size;
+
+        let screen_rect = calculate_screen_rect(self.physical_size, self.points_per_pixel);
+        self.egui_input.screen_rect = Some(screen_rect);
+
+        if let Some(viewport_info) = self.egui_input.viewports.get_mut(&self.viewport_id) {
+            viewport_info.native_pixels_per_point = Some(self.pixels_per_point);
+            viewport_info.inner_rect = Some(screen_rect);
+        }
+
+        // Schedule to repaint on the next frame.
+        self.repaint_after = Some(Instant::now());
+    }
 }
 
 impl<State, U> WindowHandler for EguiWindow<State, U>
@@ -367,10 +392,21 @@ where
                 ViewportCommand::Close => {
                     window.close();
                 }
-                ViewportCommand::InnerSize(size) => window.resize(baseview::Size {
-                    width: size.x.max(1.0) as f64,
-                    height: size.y.max(1.0) as f64,
-                }),
+                ViewportCommand::InnerSize(size) => {
+                    let logical_size = size.max(vec2(1.0, 1.0));
+
+                    window.resize(baseview::Size {
+                        width: logical_size.x as f64,
+                        height: logical_size.y as f64,
+                    });
+
+                    let physical_size = PhySize {
+                        width: (logical_size.x * self.pixels_per_point).round() as u32,
+                        height: (logical_size.y * self.pixels_per_point).round() as u32,
+                    };
+
+                    self.apply_window_resize(physical_size, self.pixels_per_point);
+                }
                 _ => {}
             }
         }
@@ -451,6 +487,7 @@ where
             baseview::Event::Mouse(event) => match event {
                 baseview::MouseEvent::CursorMoved {
                     position,
+                    screen_position,
                     modifiers,
                 } => {
                     self.update_modifiers(modifiers);
@@ -458,6 +495,10 @@ where
                     let pos = pos2(position.x as f32, position.y as f32);
                     self.pointer_pos_in_points = Some(pos);
                     self.egui_input.events.push(egui::Event::PointerMoved(pos));
+
+                    let screen_pos = pos2(screen_position.x as f32, screen_position.y as f32);
+                    self.egui_ctx
+                        .data_mut(|data| data.insert_temp(screen_cursor_pos_id(), screen_pos));
                 }
                 baseview::MouseEvent::ButtonPressed { button, modifiers } => {
                     self.update_modifiers(modifiers);
@@ -522,6 +563,8 @@ where
                 baseview::MouseEvent::CursorLeft => {
                     self.pointer_pos_in_points = None;
                     self.egui_input.events.push(egui::Event::PointerGone);
+                    self.egui_ctx
+                        .data_mut(|data| data.remove::<egui::Pos2>(screen_cursor_pos_id()));
                 }
                 _ => {}
             },
@@ -608,29 +651,12 @@ where
             }
             baseview::Event::Window(event) => match event {
                 baseview::WindowEvent::Resized(window_info) => {
-                    self.pixels_per_point = match self.scale_policy {
+                    let pixels_per_point = match self.scale_policy {
                         WindowScalePolicy::ScaleFactor(scale) => scale,
                         WindowScalePolicy::SystemScaleFactor => window_info.scale(),
                     } as f32;
-                    self.points_per_pixel = self.pixels_per_point.recip();
 
-                    self.physical_size = window_info.physical_size();
-
-                    let screen_rect =
-                        calculate_screen_rect(self.physical_size, self.points_per_pixel);
-
-                    self.egui_input.screen_rect = Some(screen_rect);
-
-                    let viewport_info = self
-                        .egui_input
-                        .viewports
-                        .get_mut(&self.viewport_id)
-                        .unwrap();
-                    viewport_info.native_pixels_per_point = Some(self.pixels_per_point);
-                    viewport_info.inner_rect = Some(screen_rect);
-
-                    // Schedule to repaint on the next frame.
-                    self.repaint_after = Some(Instant::now());
+                    self.apply_window_resize(window_info.physical_size(), pixels_per_point);
                 }
                 baseview::WindowEvent::Focused => {
                     self.egui_input
