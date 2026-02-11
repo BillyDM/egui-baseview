@@ -11,7 +11,7 @@ use egui_baseview::egui::Context;
 use egui_baseview::EguiWindow;
 use egui_baseview::Queue;
 use nih_plug::prelude::{Editor, GuiContext, ParamSetter, ParentWindowHandle};
-use parking_lot::RwLock;
+use parking_lot::Mutex;
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -20,7 +20,7 @@ use std::sync::Arc;
 pub(crate) struct EguiEditor<T> {
     pub(crate) egui_state: Arc<EguiState>,
     /// The plugin's state. This is kept in between editor openenings.
-    pub(crate) user_state: Arc<RwLock<T>>,
+    pub(crate) user_state: Arc<Mutex<T>>,
 
     pub(crate) settings: Arc<EguiSettings>,
 
@@ -63,7 +63,7 @@ unsafe impl HasRawWindowHandle for ParentWindowHandleAdapter {
 
 impl<T> Editor for EguiEditor<T>
 where
-    T: 'static + Send + Sync,
+    T: 'static + Send,
 {
     fn spawn(
         &self,
@@ -111,7 +111,7 @@ where
             },
             self.settings.graphics_config.clone(),
             state,
-            move |egui_ctx, queue, state| build(egui_ctx, queue, &mut state.write()),
+            move |egui_ctx, queue, state| build(egui_ctx, queue, &mut state.lock()),
             move |egui_ctx, queue, state| {
                 let setter = ParamSetter::new(context.as_ref());
 
@@ -141,7 +141,7 @@ where
                 // this we would also have a blank GUI when it gets first opened because most DAWs open
                 // their GUI while the window is still unmapped.
                 egui_ctx.request_repaint();
-                (update)(egui_ctx, &setter, queue, &mut state.write());
+                (update)(egui_ctx, &setter, queue, &mut state.lock());
             },
         );
 
