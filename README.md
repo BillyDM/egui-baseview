@@ -2,6 +2,8 @@
 ![Test](https://github.com/BillyDM/egui-baseview/workflows/Rust/badge.svg)
 [![License](https://img.shields.io/crates/l/egui-baseview.svg)](https://github.com/BillyDM/egui-baseview/blob/main/LICENSE)
 
+> This project has moved to a new hard fork of NIH-plug for easier maintanence: https://codeberg.org/BillyDM/nih-plug
+
 A [`baseview`](https://github.com/RustAudio/baseview) backend for [`egui`](https://github.com/emilk/egui). This also contains an adapter for [`NIH-plug`](https://github.com/robbert-vdh/nih-plug).
 
 <div align="center">
